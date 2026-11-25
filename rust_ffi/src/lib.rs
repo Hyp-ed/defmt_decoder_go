@@ -1,6 +1,6 @@
 pub use inner::*;
 use std::{
-    ffi::CString,
+    ffi::{CStr, c_char},
     ptr::{null, null_mut},
 };
 
@@ -10,22 +10,31 @@ use std::{
 /// The function asserts that:
 /// 1. the lengths are the same
 /// 2. both pointers are non-zero
+/// 3. every string in the array is not a null pointer
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn init(
-    arr: *const CString,
+    arr: *const *const c_char,
     len: usize,
     result_arr: *mut i32,
     result_len: usize,
-) {
+) -> i32 {
     assert_eq!(len, result_len);
-    assert_ne!(arr, null());
-    assert_ne!(result_arr, null_mut());
+    assert!(!arr.is_null());
+    assert!(!result_arr.is_null());
 
     unsafe {
+        let raw_arr = std::slice::from_raw_parts(arr, len);
+
+        let mut strings = vec![];
+        for raw_str in raw_arr.iter() {
+            assert!(!raw_str.is_null());
+            strings.push(CStr::from_ptr(*raw_str));
+        }
+
         init_inner(
-            std::slice::from_raw_parts(arr, len),
+            &strings,
             std::slice::from_raw_parts_mut(result_arr, result_len),
-        );
+        )
     }
 }
 
