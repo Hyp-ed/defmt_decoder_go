@@ -1,3 +1,3 @@
-module hyped/defmt_decoder_go
+module hyped/defmt_decoder
 
 go 1.27.3
