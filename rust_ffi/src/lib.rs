@@ -28,3 +28,38 @@ pub unsafe extern "C" fn init(
         );
     }
 }
+
+/// # Safety
+/// This function takes in an array of bytes and a result array of bytes, so it's the caller's
+/// responsibility to make sure that the pointers and lengths are sound.
+/// The function asserts that the pointers are non-zero
+/// This function returns the size of bytes written, or error (as a negative number)
+/// If the formatted string is larger than the supplied output buffer length, it will return -1
+/// On success, the number of input bytes the frame occupied is written to `consumed`,
+/// otherwise `consumed` is set to 0
+/// If `colored` is true, the log level is wrapped in ANSI color codes, which count towards the
+/// output length
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn decode(
+    idx: usize,
+    input: *const u8,
+    input_len: usize,
+    output: *mut u8,
+    output_len: usize,
+    consumed: *mut usize,
+    colored: bool,
+) -> i32 {
+    assert_ne!(input, null());
+    assert_ne!(output, null_mut());
+    assert_ne!(consumed, null_mut());
+
+    unsafe {
+        decode_inner(
+            idx,
+            std::slice::from_raw_parts(input, input_len),
+            std::slice::from_raw_parts_mut(output, output_len),
+            &mut *consumed,
+            colored,
+        )
+    }
+}
