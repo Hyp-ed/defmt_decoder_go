@@ -120,18 +120,16 @@ pub fn init_inner(paths: &[&CStr], result: &mut [i32]) -> i32 {
 /// Return codes of `decode_inner` (a non-negative value is the output length)
 #[repr(i32)]
 enum DecodeErrCodes {
-    /// `output` is too small for the formatted string; nothing is written
-    OutputBufferTooSmall = -1,
     /// The file at `idx` failed to load in `init_inner`
-    EntryFailedToInitialize = -2,
-    /// `input` ends in the middle of a frame; retry once more bytes are available
-    UnexpectedEOF = -4,
-    /// `input` does not start with a valid frame
-    Malformed = -5,
+    EntryFailedToInitialize = -1,
     /// `init_inner` has not been called yet
-    CalledBeforeInit = -3,
+    CalledBeforeInit = -2,
+    /// `input` ends in the middle of a frame; retry once more bytes are available
+    UnexpectedEOF = -3,
+    /// `input` does not start with a valid frame
+    Malformed = -4,
     /// `idx` is not smaller than the number of paths passed to `init_inner`
-    IndexOutOfBounds = -6,
+    IndexOutOfBounds = -5,
 }
 
 /// Decodes the frame at the start of `input` with the table of the file at `idx`, and writes
@@ -192,7 +190,8 @@ pub fn decode_inner(
 
     let bytes = formatted.as_bytes();
     if bytes.len() > output.len() || bytes.len() > i32::MAX as usize {
-        return DecodeErrCodes::OutputBufferTooSmall as i32;
+        *consumed = frame_size;
+        return bytes.len() as i32;
     }
 
     output[..bytes.len()].copy_from_slice(bytes);

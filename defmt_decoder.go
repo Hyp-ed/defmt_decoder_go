@@ -96,4 +96,49 @@ func Init(paths []string) *InitError {
 	return error
 }
 
-func Decode() {}
+type DecodeError struct {
+	code DecodeErrorCode
+}
+
+type DecodeErrorCode int
+
+const (
+	EntryFailedToInitialize DecodeErrorCode = -1
+	CalledBeforeInit        DecodeErrorCode = -2
+	UnexpectedEOF           DecodeErrorCode = -3
+	Malformed               DecodeErrorCode = -4
+	IndexOutOfBounds        DecodeErrorCode = -5
+)
+
+func Decode(index int, input []uint8, colored bool) (string, int, *DecodeError) {
+	const BUFFER_SIZE int = 32
+	output := make([]C.uint8_t, BUFFER_SIZE)
+	consumed := C.size_t(0)
+
+	result := C.defmt_decoder_decode(C.size_t(index), (*_Ctype_uint8_t)(&input[0]), C.size_t(len(input)), &output[0], C.size_t(len(output)), &consumed, C.bool(colored))
+
+	if result < 0 {
+		error_code := DecodeErrorCode(result)
+		return "", 0, new(DecodeError{error_code})
+	}
+
+	if int(result) > len(output) {
+		output := make([]C.uint8_t, result)
+		result = C.defmt_decoder_decode(
+			C.size_t(index),
+			(*_Ctype_uint8_t)(&input[0]),
+			C.size_t(len(input)),
+			&output[0],
+			C.size_t(len(output)),
+			&consumed,
+			C.bool(colored),
+		)
+
+		if result < 0 {
+			error_code := DecodeErrorCode(result)
+			return "", 0, new(DecodeError{error_code})
+		}
+	}
+
+	return string(output), int(consumed), nil
+}
