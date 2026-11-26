@@ -166,7 +166,7 @@ func Decode(index int, input []uint8, colored bool) (string, int, *DecodeError) 
 	output := make([]C.uint8_t, BUFFER_SIZE)
 	consumed := C.size_t(0)
 
-	result := C.defmt_decoder_decode(C.size_t(index), (*_Ctype_uint8_t)(&input[0]), C.size_t(len(input)), &output[0], C.size_t(len(output)), &consumed, C.bool(colored))
+	result := C.defmt_decoder_decode(C.size_t(index), (*C.uint8_t)(&input[0]), C.size_t(len(input)), &output[0], C.size_t(len(output)), &consumed, C.bool(colored))
 
 	if result < 0 {
 		error_code := DecodeErrorCode(result)
@@ -177,7 +177,7 @@ func Decode(index int, input []uint8, colored bool) (string, int, *DecodeError) 
 		output = make([]C.uint8_t, result)
 		result = C.defmt_decoder_decode(
 			C.size_t(index),
-			(*_Ctype_uint8_t)(&input[0]),
+			(*C.uint8_t)(&input[0]),
 			C.size_t(len(input)),
 			&output[0],
 			C.size_t(len(output)),
@@ -191,5 +191,5 @@ func Decode(index int, input []uint8, colored bool) (string, int, *DecodeError) 
 		}
 	}
 
-	return string(output), int(consumed), nil
+	return string(output[:result]), int(consumed), nil
 }
