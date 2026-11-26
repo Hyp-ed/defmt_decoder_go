@@ -134,21 +134,14 @@ enum DecodeErrCodes {
 
 /// Decodes the frame at the start of `input` with the table of the file at `idx`, and writes
 /// it as a UTF-8 string (not NUL-terminated) to `output`. If location info is available, a
-/// `\n└─ module @ file:line` line is appended. If `colored` is true, the log level is wrapped
-/// in ANSI color codes, which count towards the output length.
+/// `\n└─ module @ file:line` line is appended.
 ///
 /// If a frame was decoded, returns the length of the formatted string and sets `consumed` to
 /// the number of input bytes the frame occupied. The string is written only if it fits in
 /// `output`; if the returned length exceeds `output.len()`, nothing is written and the caller
 /// should retry with a buffer of at least that size. On error, returns a `DecodeErrCodes` and
 /// sets `consumed` to `0`.
-pub fn decode_inner(
-    idx: usize,
-    input: &[u8],
-    output: &mut [u8],
-    consumed: &mut usize,
-    colored: bool,
-) -> i32 {
+pub fn decode_inner(idx: usize, input: &[u8], output: &mut [u8], consumed: &mut usize) -> i32 {
     *consumed = 0;
 
     let Some(ctx) = DEFMT_CTX_ARR.get() else {
@@ -175,7 +168,7 @@ pub fn decode_inner(
         },
     };
 
-    let mut formatted = frame.display(colored).to_string();
+    let mut formatted = frame.display(false).to_string();
 
     if let Some(loc) = ctx
         .locations

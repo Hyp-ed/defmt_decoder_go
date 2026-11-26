@@ -1,0 +1,230 @@
+TRACE trace level
+└─ renode_test::levels @ /Users/huangfanhua/projects/renode_test/src/main.rs:116 
+DEBUG debug level
+└─ renode_test::levels @ /Users/huangfanhua/projects/renode_test/src/main.rs:117 
+INFO  info level
+└─ renode_test::levels @ /Users/huangfanhua/projects/renode_test/src/main.rs:118 
+WARN  warn level
+└─ renode_test::levels @ /Users/huangfanhua/projects/renode_test/src/main.rs:119 
+ERROR error level
+└─ renode_test::levels @ /Users/huangfanhua/projects/renode_test/src/main.rs:120 
+println has no level
+INFO  no arguments, braces escaped: {} {x}
+└─ renode_test::levels @ /Users/huangfanhua/projects/renode_test/src/main.rs:122 
+INFO  unicode: héllo wörld ✓ λ 日本
+└─ renode_test::levels @ /Users/huangfanhua/projects/renode_test/src/main.rs:123 
+INFO  u8 0 255
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:127 
+INFO  u16 0 65535
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:128 
+INFO  u32 0 4294967295
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:129 
+INFO  u64 0 18446744073709551615
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:130 
+INFO  u128 340282366920938463463374607431768211455
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:131 
+INFO  usize 4294967295
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:132 
+DEBUG i8 -128 127
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:133 
+DEBUG i16 -32768 32767
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:134 
+DEBUG i32 -2147483648 2147483647
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:135 
+DEBUG i64 -9223372036854775808 9223372036854775807
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:136 
+DEBUG i128 -170141183460469231731687303715884105728
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:137 
+DEBUG isize -2147483648
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:138 
+TRACE f32 3.14159 -0.0 inf
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:139 
+TRACE f32 nan NaN
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:140 
+TRACE f64 2.718281828459045 2.2250738585072014e-308
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:141 
+INFO  bool true false
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:142 
+INFO  bools packed true false true true false false true false true
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:143 
+INFO  char a ß 🦀
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:144 
+INFO  str runtime string
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:145 
+INFO  istr interned string
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:146 
+INFO  byte slice [1, 2, 3, 255]
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:147 
+INFO  byte array [10, 20, 30, 40, 50]
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:148 
+INFO  empty slice []
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:149 
+INFO  generic slice [1, 2, 3]
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:150 
+INFO  explicit format Point { x: 1, y: 2 }
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:151 
+INFO  inferred 1 -2 3.5 str
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:152 
+INFO  positional 7 9 7
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:153 
+INFO  named-ish reuse 48879 beef
+└─ renode_test::primitives @ /Users/huangfanhua/projects/renode_test/src/main.rs:154 
+INFO  hex deadbeef DEADBEEF 0xcafe 0xCAFE
+└─ renode_test::hints @ /Users/huangfanhua/projects/renode_test/src/main.rs:158 
+INFO  hex padded 05 0x00ab 00001234
+└─ renode_test::hints @ /Users/huangfanhua/projects/renode_test/src/main.rs:159 
+INFO  binary 1010 0b11 0b0000000011111111
+└─ renode_test::hints @ /Users/huangfanhua/projects/renode_test/src/main.rs:160 
+INFO  octal 755 0o17
+└─ renode_test::hints @ /Users/huangfanhua/projects/renode_test/src/main.rs:161 
+INFO  negative hex ff 0xfffffffe
+└─ renode_test::hints @ /Users/huangfanhua/projects/renode_test/src/main.rs:162 
+INFO  zero pad 00042 -0007 009
+└─ renode_test::hints @ /Users/huangfanhua/projects/renode_test/src/main.rs:163 
+INFO  ascii b"hello\x00\x7f\nworld"
+└─ renode_test::hints @ /Users/huangfanhua/projects/renode_test/src/main.rs:164 
+INFO  hex slice [de, ad] [0x01, 0x02]
+└─ renode_test::hints @ /Users/huangfanhua/projects/renode_test/src/main.rs:165 
+INFO  debug hint "quoted\t\"s\"" c
+└─ renode_test::hints @ /Users/huangfanhua/projects/renode_test/src/main.rs:166 
+INFO  seconds 1.234567 98.765
+└─ renode_test::hints @ /Users/huangfanhua/projects/renode_test/src/main.rs:167 
+INFO  tstamp 00:00:01.234567 00:01:38.765
+└─ renode_test::hints @ /Users/huangfanhua/projects/renode_test/src/main.rs:168 
+INFO  iso8601 2023-11-14T22:13:20.123Z 2023-11-14T22:13:20Z
+└─ renode_test::hints @ /Users/huangfanhua/projects/renode_test/src/main.rs:169 
+WARN  hinted Format [1, ff] Some(0b101)
+└─ renode_test::hints @ /Users/huangfanhua/projects/renode_test/src/main.rs:170 
+INFO  bitfields 3 12 6 11
+└─ renode_test::bitfields @ /Users/huangfanhua/projects/renode_test/src/main.rs:175 
+INFO  bitfield hints c3 0b10110110
+└─ renode_test::bitfields @ /Users/huangfanhua/projects/renode_test/src/main.rs:176 
+INFO  single bit 1 1
+└─ renode_test::bitfields @ /Users/huangfanhua/projects/renode_test/src/main.rs:177 
+INFO  u8 field 5
+└─ renode_test::bitfields @ /Users/huangfanhua/projects/renode_test/src/main.rs:178 
+INFO  u32 field 0xabc
+└─ renode_test::bitfields @ /Users/huangfanhua/projects/renode_test/src/main.rs:179 
+INFO  u64 field 16777215
+└─ renode_test::bitfields @ /Users/huangfanhua/projects/renode_test/src/main.rs:180 
+INFO  Reg { raw: 0x0000ab06, en: 0, mode: 3, div: 171 }
+└─ renode_test::bitfields @ /Users/huangfanhua/projects/renode_test/src/main.rs:181 
+INFO  array [1, 2, 3]
+└─ renode_test::compound @ /Users/huangfanhua/projects/renode_test/src/main.rs:185 
+INFO  nested arrays [[1, 2], [3, 4]]
+└─ renode_test::compound @ /Users/huangfanhua/projects/renode_test/src/main.rs:186 
+INFO  slice [-1, 0, 1]
+└─ renode_test::compound @ /Users/huangfanhua/projects/renode_test/src/main.rs:187 
+INFO  str slice [a, bc, ]
+└─ renode_test::compound @ /Users/huangfanhua/projects/renode_test/src/main.rs:188 
+INFO  tuple (1, two, 3.0) ()
+└─ renode_test::compound @ /Users/huangfanhua/projects/renode_test/src/main.rs:189 
+INFO  12-tuple (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+└─ renode_test::compound @ /Users/huangfanhua/projects/renode_test/src/main.rs:190 
+INFO  option Some(42) None
+└─ renode_test::compound @ /Users/huangfanhua/projects/renode_test/src/main.rs:191 
+INFO  nested option Some(Some(Point { x: -1, y: 1 }))
+└─ renode_test::compound @ /Users/huangfanhua/projects/renode_test/src/main.rs:192 
+WARN  result Ok(1) Err(bad)
+└─ renode_test::compound @ /Users/huangfanhua/projects/renode_test/src/main.rs:193 
+INFO  refs 5 6
+└─ renode_test::compound @ /Users/huangfanhua/projects/renode_test/src/main.rs:194 
+INFO  ptr 0x20000000
+└─ renode_test::compound @ /Users/huangfanhua/projects/renode_test/src/main.rs:195 
+INFO  struct Point { x: 10, y: -20 }
+└─ renode_test::derived @ /Users/huangfanhua/projects/renode_test/src/main.rs:199 
+INFO  unit struct Unit
+└─ renode_test::derived @ /Users/huangfanhua/projects/renode_test/src/main.rs:200 
+INFO  tuple struct Tuple(7, true)
+└─ renode_test::derived @ /Users/huangfanhua/projects/renode_test/src/main.rs:201 
+INFO  generic Generic { inner: [1, 2], tag: "tag" }
+└─ renode_test::derived @ /Users/huangfanhua/projects/renode_test/src/main.rs:202 
+DEBUG enum Stop Move { dx: -3, dy: 4 } Say(hi)
+└─ renode_test::derived @ /Users/huangfanhua/projects/renode_test/src/main.rs:203 
+ERROR nested Nested { id: 4660, origin: Point { x: 0, y: 0 }, cmd: Move { dx: 1, dy: -1 }, samples: [9, 8, 7, 6], maybe: Some(100) }
+└─ renode_test::derived @ /Users/huangfanhua/projects/renode_test/src/main.rs:204 
+INFO  array of structs [Point { x: 1, y: 1 }, Point { x: 2, y: 2 }]
+└─ renode_test::derived @ /Users/huangfanhua/projects/renode_test/src/main.rs:214 
+INFO  duration Duration { secs: 1, nanos: 500000000 } Duration { secs: 0, nanos: 7 }
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:218 
+INFO  ordering via Debug2Format Less
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:219 
+INFO  nonzero 5 -9
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:220 
+INFO  wrapping 250
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:221 
+INFO  phantom PhantomData
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:222 
+INFO  cell Cell { value: 3 }) refcell RefCell { value: 4 }
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:223 
+WARN  refcell borrowed RefCell { value: <borrowed> } err BorrowError
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:226 
+INFO  ranges 1..5 2.. .. 3..=7 ..4 ..=9
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:227 
+INFO  ipv4 192.168.1.10 ipv6 0000:0000:0000:0000:0000:0000:0000:0001
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:228 
+INFO  ipv6 2001:0db8:0000:0000:0000:0000:ff00:0042
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:229 
+INFO  socket 10.0.0.1:8080
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:230 
+INFO  ipaddr 255.255.255.255
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:231 
+ERROR parse errors provided string was not `true` or `false` TryFromIntError(())
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:232 
+ERROR utf8 err invalid utf-8 sequence of 1 bytes from index 0
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:233 
+ERROR slice err TryFromSliceError(())
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:234 
+ERROR addr err AddrParseError(_)
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:235 
+ERROR fmt err fmt::Error
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:236 
+INFO  iter Iter { slice: [1, 2, 3], position: ? }
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:237 
+INFO  chunks ChunksExact(..)
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:238 
+INFO  windows Windows(..)
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:239 
+INFO  zip Zip(..)
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:240 
+INFO  str plain istr interned
+└─ renode_test::core_types @ /Users/huangfanhua/projects/renode_test/src/main.rs:241 
+INFO  Debug2Format CoreDebug { a: 1, b: "dbg" }
+└─ renode_test::adapters @ /Users/huangfanhua/projects/renode_test/src/main.rs:245 
+INFO  Display2Format 12.5
+└─ renode_test::adapters @ /Users/huangfanhua/projects/renode_test/src/main.rs:246 
+INFO  Debug2Format slice [1, 2, 3]
+└─ renode_test::adapters @ /Users/huangfanhua/projects/renode_test/src/main.rs:247 
+TRACE EXACT64 trace aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+└─ renode_test::exact64 @ /Users/huangfanhua/projects/renode_test/src/main.rs:253 
+DEBUG EXACT64 debug u32=4294967295 i8=-128 x=0xdeadbeef ........
+└─ renode_test::exact64 @ /Users/huangfanhua/projects/renode_test/src/main.rs:254 
+INFO  EXACT64 info Point { x: 1, y: 2 } [1, 2, 3] ...............
+└─ renode_test::exact64 @ /Users/huangfanhua/projects/renode_test/src/main.rs:255 
+WARN  EXACT64 warn Some(-1) Ok(7) Err(e) ........................
+└─ renode_test::exact64 @ /Users/huangfanhua/projects/renode_test/src/main.rs:256 
+ERROR EXACT64 error ab true ß 18446744073709551615 1.5 ........
+└─ renode_test::exact64 @ /Users/huangfanhua/projects/renode_test/src/main.rs:257 
+EXACT64 println [de, ad, be, ef] Unit ..........................
+INFO  EXACT64 utf8 λλλλ ✓✓ 0x00ab 15 ....................
+└─ renode_test::exact64 @ /Users/huangfanhua/projects/renode_test/src/main.rs:259 
+INFO  --- end of test data ---
+└─ renode_test::____embassy_main_task::____embassy_main_task_inner_function::{async_fn#0} @ /Users/huangfanhua/projects/renode_test/src/main.rs:105 
+TRACE heartbeat 1
+└─ renode_test::____embassy_main_task::____embassy_main_task_inner_function::{async_fn#0} @ /Users/huangfanhua/projects/renode_test/src/main.rs:110 
+TRACE heartbeat 2
+└─ renode_test::____embassy_main_task::____embassy_main_task_inner_function::{async_fn#0} @ /Users/huangfanhua/projects/renode_test/src/main.rs:110 
+TRACE heartbeat 3
+└─ renode_test::____embassy_main_task::____embassy_main_task_inner_function::{async_fn#0} @ /Users/huangfanhua/projects/renode_test/src/main.rs:110 
+TRACE heartbeat 4
+└─ renode_test::____embassy_main_task::____embassy_main_task_inner_function::{async_fn#0} @ /Users/huangfanhua/projects/renode_test/src/main.rs:110 
+TRACE heartbeat 5
+└─ renode_test::____embassy_main_task::____embassy_main_task_inner_function::{async_fn#0} @ /Users/huangfanhua/projects/renode_test/src/main.rs:110 
+TRACE heartbeat 6
+└─ renode_test::____embassy_main_task::____embassy_main_task_inner_function::{async_fn#0} @ /Users/huangfanhua/projects/renode_test/src/main.rs:110 
+TRACE heartbeat 7
+└─ renode_test::____embassy_main_task::____embassy_main_task_inner_function::{async_fn#0} @ /Users/huangfanhua/projects/renode_test/src/main.rs:110 
+TRACE heartbeat 8
+└─ renode_test::____embassy_main_task::____embassy_main_task_inner_function::{async_fn#0} @ /Users/huangfanhua/projects/renode_test/src/main.rs:110 
+TRACE heartbeat 9
+└─ renode_test::____embassy_main_task::____embassy_main_task_inner_function::{async_fn#0} @ /Users/huangfanhua/projects/renode_test/src/main.rs:110 

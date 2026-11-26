@@ -80,8 +80,6 @@ pub unsafe extern "C" fn defmt_decoder_ctx_init(
 /// - `output_len`: size of `output` in bytes
 /// - `consumed`: if a frame was decoded, receives the number of input bytes the frame occupied,
 ///   so the next frame starts at `input + *consumed`; set to `0` on any error
-/// - `colored`: if true, the log level is wrapped in ANSI color codes, which count towards the
-///   output length
 ///
 /// # Return value
 /// - `>= 0`: the length in bytes of the formatted string. If it is `<= output_len`, the string
@@ -105,7 +103,6 @@ pub unsafe extern "C" fn defmt_decoder_decode(
     output: *mut u8,
     output_len: usize,
     consumed: *mut usize,
-    colored: bool,
 ) -> i32 {
     assert_ne!(input, null());
     assert_ne!(output, null_mut());
@@ -117,7 +114,6 @@ pub unsafe extern "C" fn defmt_decoder_decode(
             std::slice::from_raw_parts(input, input_len),
             std::slice::from_raw_parts_mut(output, output_len),
             &mut *consumed,
-            colored,
         )
     }
 }

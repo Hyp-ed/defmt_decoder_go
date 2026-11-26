@@ -4,7 +4,8 @@ import "strings"
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/build/include/
-#cgo LDFLAGS: -L${SRCDIR}/build/lib -ldefmt_decoder_wrapper -Wl,-rpath,${SRCDIR}/build/lib
+#cgo LDFLAGS: -L${SRCDIR}/build/lib -ldefmt_decoder_wrapper
+#cgo !windows LDFLAGS: -Wl,-rpath,${SRCDIR}/build/lib
 #include "defmt_decoder_wrapper.h"
 */
 import "C"
@@ -152,12 +153,11 @@ func (e *DecodeError) Error() string {
 
 // Decode decodes the defmt frame at the start of input with the table of the file at index
 // (its position in the paths passed to Init). If location info is available, a
-// "\n└─ module @ file:line" line is appended. If colored is true, the log level is wrapped in
-// ANSI color codes.
+// "\n└─ module @ file:line" line is appended.
 //
 // Returns the formatted frame and the number of input bytes it occupied, so the next frame
 // starts at input[consumed:].
-func Decode(index int, input []uint8, colored bool) (string, int, *DecodeError) {
+func Decode(index int, input []uint8) (string, int, *DecodeError) {
 	if len(input) == 0 {
 		return "", 0, new(DecodeError{EmptyInput})
 	}
@@ -166,7 +166,7 @@ func Decode(index int, input []uint8, colored bool) (string, int, *DecodeError) 
 	output := make([]C.uint8_t, BUFFER_SIZE)
 	consumed := C.size_t(0)
 
-	result := C.defmt_decoder_decode(C.size_t(index), (*C.uint8_t)(&input[0]), C.size_t(len(input)), &output[0], C.size_t(len(output)), &consumed, C.bool(colored))
+	result := C.defmt_decoder_decode(C.size_t(index), (*C.uint8_t)(&input[0]), C.size_t(len(input)), &output[0], C.size_t(len(output)), &consumed)
 
 	if result < 0 {
 		error_code := DecodeErrorCode(result)
@@ -182,7 +182,6 @@ func Decode(index int, input []uint8, colored bool) (string, int, *DecodeError) 
 			&output[0],
 			C.size_t(len(output)),
 			&consumed,
-			C.bool(colored),
 		)
 
 		if result < 0 {

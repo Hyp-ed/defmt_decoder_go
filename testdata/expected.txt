@@ -1,0 +1,169 @@
+TRACE trace level
+DEBUG debug level
+INFO info level
+WARN warn level
+ERROR error level
+println has no level
+INFO no arguments, braces escaped: {} {x}
+INFO unicode: héllo wörld ✓ λ 日本
+INFO u8 0 255
+INFO u16 0 65535
+INFO u32 0 4294967295
+INFO u64 0 18446744073709551615
+INFO u128 340282366920938463463374607431768211455
+INFO usize 4294967295
+DEBUG i8 -128 127
+DEBUG i16 -32768 32767
+DEBUG i32 -2147483648 2147483647
+DEBUG i64 -9223372036854775808 9223372036854775807
+DEBUG i128 -170141183460469231731687303715884105728
+DEBUG isize -2147483648
+TRACE f32 3.14159 -0.0 inf
+TRACE f32 nan NaN
+TRACE f64 2.718281828459045 2.2250738585072014e-308
+INFO bool true false
+INFO bools packed true false true true false false true false true
+INFO char a ß 🦀
+INFO str runtime string
+INFO istr interned string
+INFO byte slice [1, 2, 3, 255]
+INFO byte array [10, 20, 30, 40, 50]
+INFO empty slice []
+INFO generic slice [1, 2, 3]
+INFO explicit format Point { x: 1, y: 2 }
+INFO inferred 1 -2 3.5 str
+INFO positional 7 9 7
+INFO named-ish reuse 48879 beef
+INFO hex deadbeef DEADBEEF 0xcafe 0xCAFE
+INFO hex padded 05 0x00ab 00001234
+INFO binary 1010 0b11 0b0000000011111111
+INFO octal 755 0o17
+INFO negative hex ff 0xfffffffe
+INFO zero pad 00042 -0007 009
+INFO ascii b"hello\x00\x7f\nworld"
+INFO hex slice [de, ad] [0x01, 0x02]
+INFO debug hint "quoted\t\"s\"" c
+INFO seconds 1.234567 98.765
+INFO tstamp 00:00:01.234567 00:01:38.765
+INFO iso8601 2023-11-14T22:13:20.123Z 2023-11-14T22:13:20Z
+WARN hinted Format [1, ff] Some(0b101)
+INFO bitfields 3 12 6 11
+INFO bitfield hints c3 0b10110110
+INFO single bit 1 1
+INFO u8 field 5
+INFO u32 field 0xabc
+INFO u64 field 16777215
+INFO Reg { raw: 0x0000ab06, en: 0, mode: 3, div: 171 }
+INFO array [1, 2, 3]
+INFO nested arrays [[1, 2], [3, 4]]
+INFO slice [-1, 0, 1]
+INFO str slice [a, bc, ]
+INFO tuple (1, two, 3.0) ()
+INFO 12-tuple (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+INFO option Some(42) None
+INFO nested option Some(Some(Point { x: -1, y: 1 }))
+WARN result Ok(1) Err(bad)
+INFO refs 5 6
+INFO ptr 0x20000000
+INFO struct Point { x: 10, y: -20 }
+INFO unit struct Unit
+INFO tuple struct Tuple(7, true)
+INFO generic Generic { inner: [1, 2], tag: "tag" }
+DEBUG enum Stop Move { dx: -3, dy: 4 } Say(hi)
+ERROR nested Nested { id: 4660, origin: Point { x: 0, y: 0 }, cmd: Move { dx: 1, dy: -1 }, samples: [9, 8, 7, 6], maybe: Some(100) }
+INFO array of structs [Point { x: 1, y: 1 }, Point { x: 2, y: 2 }]
+INFO duration Duration { secs: 1, nanos: 500000000 } Duration { secs: 0, nanos: 7 }
+INFO ordering via Debug2Format Less
+INFO nonzero 5 -9
+INFO wrapping 250
+INFO phantom PhantomData
+INFO cell Cell { value: 3 }) refcell RefCell { value: 4 }
+WARN refcell borrowed RefCell { value: <borrowed> } err BorrowError
+INFO ranges 1..5 2.. .. 3..=7 ..4 ..=9
+INFO ipv4 192.168.1.10 ipv6 0000:0000:0000:0000:0000:0000:0000:0001
+INFO ipv6 2001:0db8:0000:0000:0000:0000:ff00:0042
+INFO socket 10.0.0.1:8080
+INFO ipaddr 255.255.255.255
+ERROR parse errors provided string was not `true` or `false` TryFromIntError(())
+ERROR utf8 err invalid utf-8 sequence of 1 bytes from index 0
+ERROR slice err TryFromSliceError(())
+ERROR addr err AddrParseError(_)
+ERROR fmt err fmt::Error
+INFO iter Iter { slice: [1, 2, 3], position: ? }
+INFO chunks ChunksExact(..)
+INFO windows Windows(..)
+INFO zip Zip(..)
+INFO str plain istr interned
+INFO Debug2Format CoreDebug { a: 1, b: "dbg" }
+INFO Display2Format 12.5
+INFO Debug2Format slice [1, 2, 3]
+TRACE EXACT64 trace aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+DEBUG EXACT64 debug u32=4294967295 i8=-128 x=0xdeadbeef ........
+INFO EXACT64 info Point { x: 1, y: 2 } [1, 2, 3] ...............
+WARN EXACT64 warn Some(-1) Ok(7) Err(e) ........................
+ERROR EXACT64 error ab true ß 18446744073709551615 1.5 ........
+EXACT64 println [de, ad, be, ef] Unit ..........................
+INFO EXACT64 utf8 λλλλ ✓✓ 0x00ab 15 ....................
+INFO --- end of test data ---
+TRACE heartbeat 1
+TRACE heartbeat 2
+TRACE heartbeat 3
+TRACE heartbeat 4
+TRACE heartbeat 5
+TRACE heartbeat 6
+TRACE heartbeat 7
+TRACE heartbeat 8
+TRACE heartbeat 9
+TRACE heartbeat 10
+TRACE heartbeat 11
+TRACE heartbeat 12
+TRACE heartbeat 13
+TRACE heartbeat 14
+TRACE heartbeat 15
+TRACE heartbeat 16
+TRACE heartbeat 17
+TRACE heartbeat 18
+TRACE heartbeat 19
+TRACE heartbeat 20
+TRACE heartbeat 21
+TRACE heartbeat 22
+TRACE heartbeat 23
+TRACE heartbeat 24
+TRACE heartbeat 25
+TRACE heartbeat 26
+TRACE heartbeat 27
+TRACE heartbeat 28
+TRACE heartbeat 29
+TRACE heartbeat 30
+TRACE heartbeat 31
+TRACE heartbeat 32
+TRACE heartbeat 33
+TRACE heartbeat 34
+TRACE heartbeat 35
+TRACE heartbeat 36
+TRACE heartbeat 37
+TRACE heartbeat 38
+TRACE heartbeat 39
+TRACE heartbeat 40
+TRACE heartbeat 41
+TRACE heartbeat 42
+TRACE heartbeat 43
+TRACE heartbeat 44
+TRACE heartbeat 45
+TRACE heartbeat 46
+TRACE heartbeat 47
+TRACE heartbeat 48
+TRACE heartbeat 49
+TRACE heartbeat 50
+TRACE heartbeat 51
+TRACE heartbeat 52
+TRACE heartbeat 53
+TRACE heartbeat 54
+TRACE heartbeat 55
+TRACE heartbeat 56
+TRACE heartbeat 57
+TRACE heartbeat 58
+TRACE heartbeat 59
+TRACE heartbeat 60
+TRACE heartbeat 61
+TRACE heartbeat 62

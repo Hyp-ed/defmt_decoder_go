@@ -1,4 +1,10 @@
-RUST_OUT := rust_ffi/target/release
+# cargo puts the output under target/<triple>/release when a target is given explicitly
+# (e.g. CARGO_BUILD_TARGET=x86_64-pc-windows-gnu on Windows), else under target/release
+ifdef CARGO_BUILD_TARGET
+	RUST_OUT := rust_ffi/target/$(CARGO_BUILD_TARGET)/release
+else
+	RUST_OUT := rust_ffi/target/release
+endif
 LIB_NAME := defmt_decoder_wrapper
 
 ifeq ($(OS),Windows_NT)
@@ -15,7 +21,7 @@ test: build_rust
 
 .PHONY: build_rust
 build_rust:
-	make -C rust_ffi
+	$(MAKE) -C rust_ffi
 	mkdir -p build/lib build/include
 	cp rust_ffi/include/* build/include/
 	cp $(LIB_FILES) build/lib/
