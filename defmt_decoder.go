@@ -13,26 +13,32 @@ import (
 	"unsafe"
 )
 
+// InitErrorCode is the overall result of Init.
 type InitErrorCode int
 
 const (
-	InitTwice              InitErrorCode = -1
+	// InitTwice means Init was already called; the new tables are discarded and the old ones kept.
+	InitTwice InitErrorCode = -1
+	// ErrorInAtLeastOneEntry means at least one path failed to load. The other paths were
+	// loaded and can be decoded.
 	ErrorInAtLeastOneEntry InitErrorCode = -2
 )
 
+// InitError is returned by Init. For ErrorInAtLeastOneEntry, err_codes[i] is the status of paths[i].
 type InitError struct {
 	code      InitErrorCode
 	err_codes []InitEntryErrorCode
 }
 
+// InitEntryErrorCode is the load status of a single path passed to Init.
 type InitEntryErrorCode int
 
 const (
-	NoError             InitEntryErrorCode = 0
-	StringEncodingError InitEntryErrorCode = -1
-	ReadFileError       InitEntryErrorCode = -2
-	TableParsingError   InitEntryErrorCode = -3
-	NoDefmtSectionFound InitEntryErrorCode = -4
+	NoError             InitEntryErrorCode = 0  // the file loaded successfully
+	StringEncodingError InitEntryErrorCode = -1 // the path is not valid UTF-8
+	ReadFileError       InitEntryErrorCode = -2 // the file could not be read
+	TableParsingError   InitEntryErrorCode = -3 // the defmt table could not be parsed
+	NoDefmtSectionFound InitEntryErrorCode = -4 // the file has no .defmt section
 )
 
 func (e *InitError) Error() string {
@@ -65,6 +71,10 @@ func (e *InitError) Error() string {
 	}
 }
 
+// Init loads the defmt tables of the ELF files at paths. It must be called exactly once,
+// before Decode. The position of a path in paths is the index later passed to Decode.
+//
+// Returns nil if every path loaded.
 func Init(paths []string) *InitError {
 	raw_paths := make([]*C.char, len(paths))
 
@@ -96,20 +106,29 @@ func Init(paths []string) *InitError {
 	return error
 }
 
+// DecodeError is returned by Decode.
 type DecodeError struct {
 	code DecodeErrorCode
 }
 
+// DecodeErrorCode is the reason Decode failed.
 type DecodeErrorCode int
 
 const (
-	EntryFailedToInitialize DecodeErrorCode = -1
-	CalledBeforeInit        DecodeErrorCode = -2
-	UnexpectedEOF           DecodeErrorCode = -3
-	Malformed               DecodeErrorCode = -4
-	IndexOutOfBounds        DecodeErrorCode = -5
+	EntryFailedToInitialize DecodeErrorCode = -1 // the file at index failed to load in Init
+	CalledBeforeInit        DecodeErrorCode = -2 // Init has not been called yet
+	UnexpectedEOF           DecodeErrorCode = -3 // input ends mid-frame; retry once more bytes are available
+	Malformed               DecodeErrorCode = -4 // input does not start with a valid frame
+	IndexOutOfBounds        DecodeErrorCode = -5 // index is not smaller than the number of paths passed to Init
 )
 
+// Decode decodes the defmt frame at the start of input with the table of the file at index
+// (its position in the paths passed to Init). If location info is available, a
+// "\n└─ module @ file:line" line is appended. If colored is true, the log level is wrapped in
+// ANSI color codes.
+//
+// Returns the formatted frame and the number of input bytes it occupied, so the next frame
+// starts at input[consumed:].
 func Decode(index int, input []uint8, colored bool) (string, int, *DecodeError) {
 	const BUFFER_SIZE int = 32
 	output := make([]C.uint8_t, BUFFER_SIZE)
@@ -123,7 +142,7 @@ func Decode(index int, input []uint8, colored bool) (string, int, *DecodeError) 
 	}
 
 	if int(result) > len(output) {
-		output := make([]C.uint8_t, result)
+		output = make([]C.uint8_t, result)
 		result = C.defmt_decoder_decode(
 			C.size_t(index),
 			(*_Ctype_uint8_t)(&input[0]),

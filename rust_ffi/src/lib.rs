@@ -78,20 +78,20 @@ pub unsafe extern "C" fn defmt_decoder_ctx_init(
 /// - `input_len`: number of bytes in `input`
 /// - `output`: buffer that receives the formatted UTF-8 string (not NUL-terminated)
 /// - `output_len`: size of `output` in bytes
-/// - `consumed`: on success, receives the number of input bytes the frame occupied, so the
-///   next frame starts at `input + *consumed`; set to `0` on any error
+/// - `consumed`: if a frame was decoded, receives the number of input bytes the frame occupied,
+///   so the next frame starts at `input + *consumed`; set to `0` on any error
 /// - `colored`: if true, the log level is wrapped in ANSI color codes, which count towards the
 ///   output length
 ///
 /// # Return value
-/// - `>= 0`: success, the number of bytes written to `output`
-/// - `-1`: `output` is too small for the formatted string; nothing is written, retry with a
-///   larger buffer
-/// - `-2`: the file at `idx` failed to load (see its status code from `defmt_decoder_ctx_init`)
-/// - `-3`: `defmt_decoder_ctx_init` has not been called yet
-/// - `-4`: `input` ends in the middle of a frame; retry once more bytes are available
-/// - `-5`: `input` does not start with a valid frame
-/// - `-6`: `idx` is out of bounds of the `arr` passed to `defmt_decoder_ctx_init`
+/// - `>= 0`: the length in bytes of the formatted string. If it is `<= output_len`, the string
+///   was written to `output`. Otherwise `output` is too small and nothing is written; retry
+///   with a buffer of at least the returned size (`consumed` is still set)
+/// - `-1`: the file at `idx` failed to load (see its status code from `defmt_decoder_ctx_init`)
+/// - `-2`: `defmt_decoder_ctx_init` has not been called yet
+/// - `-3`: `input` ends in the middle of a frame; retry once more bytes are available
+/// - `-4`: `input` does not start with a valid frame
+/// - `-5`: `idx` is out of bounds of the `arr` passed to `defmt_decoder_ctx_init`
 ///
 /// # Safety
 /// This function takes in an input byte array and an output byte buffer, so it's the caller's

@@ -117,7 +117,7 @@ pub fn init_inner(paths: &[&CStr], result: &mut [i32]) -> i32 {
     0
 }
 
-/// Return codes of `decode_inner` (a non-negative value is the output length)
+/// Return codes of `decode_inner` (a non-negative value is the length of the formatted string)
 #[repr(i32)]
 enum DecodeErrCodes {
     /// The file at `idx` failed to load in `init_inner`
@@ -137,9 +137,11 @@ enum DecodeErrCodes {
 /// `\n└─ module @ file:line` line is appended. If `colored` is true, the log level is wrapped
 /// in ANSI color codes, which count towards the output length.
 ///
-/// On success, returns the number of bytes written to `output` and sets `consumed` to the
-/// number of input bytes the frame occupied. On error, returns a `DecodeErrCodes` and sets
-/// `consumed` to `0`.
+/// If a frame was decoded, returns the length of the formatted string and sets `consumed` to
+/// the number of input bytes the frame occupied. The string is written only if it fits in
+/// `output`; if the returned length exceeds `output.len()`, nothing is written and the caller
+/// should retry with a buffer of at least that size. On error, returns a `DecodeErrCodes` and
+/// sets `consumed` to `0`.
 pub fn decode_inner(
     idx: usize,
     input: &[u8],
