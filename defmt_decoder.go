@@ -22,6 +22,8 @@ const (
 	// ErrorInAtLeastOneEntry means at least one path failed to load. The other paths were
 	// loaded and can be decoded.
 	ErrorInAtLeastOneEntry InitErrorCode = -2
+	// NoPaths means Init was called with no paths. Nothing is loaded and Init can be called again.
+	NoPaths InitErrorCode = -3
 )
 
 // InitError is returned by Init. For ErrorInAtLeastOneEntry, err_codes[i] is the status of paths[i].
@@ -59,13 +61,15 @@ func (e *InitError) Error() string {
 			case TableParsingError:
 				fmt.Fprintf(&result, "\t%d: Table parsing error,", i)
 			case NoDefmtSectionFound:
-				fmt.Fprintf(&result, "\t%d: String encoding error,", i)
+				fmt.Fprintf(&result, "\t%d: No defmt section found,", i)
 			default:
 				fmt.Fprintf(&result, "\t%d,", i)
 			}
 		}
 		result.WriteString("]")
 		return result.String()
+	case NoPaths:
+		return "Init must be called with at least one path"
 	default:
 		return "Unknown error"
 	}
@@ -76,6 +80,10 @@ func (e *InitError) Error() string {
 //
 // Returns nil if every path loaded.
 func Init(paths []string) *InitError {
+	if len(paths) == 0 {
+		return new(InitError{NoPaths, make([]InitEntryErrorCode, 0)})
+	}
+
 	raw_paths := make([]*C.char, len(paths))
 
 	for i := range paths {
@@ -120,7 +128,27 @@ const (
 	UnexpectedEOF           DecodeErrorCode = -3 // input ends mid-frame; retry once more bytes are available
 	Malformed               DecodeErrorCode = -4 // input does not start with a valid frame
 	IndexOutOfBounds        DecodeErrorCode = -5 // index is not smaller than the number of paths passed to Init
+	EmptyInput              DecodeErrorCode = -6 // input is empty
 )
+
+func (e *DecodeError) Error() string {
+	switch e.code {
+	case EntryFailedToInitialize:
+		return "The entry at this index failed to initialize"
+	case CalledBeforeInit:
+		return "Decode cannot be called before Init"
+	case UnexpectedEOF:
+		return "Unexpected EOF: input ends in the middle of a frame"
+	case Malformed:
+		return "Malformed frame"
+	case IndexOutOfBounds:
+		return "Index out of bounds"
+	case EmptyInput:
+		return "Input cannot be empty"
+	default:
+		return "Unknown error"
+	}
+}
 
 // Decode decodes the defmt frame at the start of input with the table of the file at index
 // (its position in the paths passed to Init). If location info is available, a
@@ -130,6 +158,10 @@ const (
 // Returns the formatted frame and the number of input bytes it occupied, so the next frame
 // starts at input[consumed:].
 func Decode(index int, input []uint8, colored bool) (string, int, *DecodeError) {
+	if len(input) == 0 {
+		return "", 0, new(DecodeError{EmptyInput})
+	}
+
 	const BUFFER_SIZE int = 32
 	output := make([]C.uint8_t, BUFFER_SIZE)
 	consumed := C.size_t(0)
