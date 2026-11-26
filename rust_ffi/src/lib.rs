@@ -4,7 +4,8 @@ use std::{
     ptr::{null, null_mut},
 };
 
-/// Loads the defmt tables of one or more ELF files. Must be called exactly once, before `decode`.
+/// Loads the defmt tables of one or more ELF files. Must be called exactly once, before
+/// `defmt_decoder_decode`.
 ///
 /// # Parameters
 /// - `arr`: array of `len` NUL-terminated, UTF-8 file paths to ELF files with a `.defmt` section
@@ -13,7 +14,7 @@ use std::{
 ///   (`result_arr[i]` corresponds to `arr[i]`)
 /// - `result_len`: length of `result_arr`, must equal `len`
 ///
-/// The position of a path in `arr` is the `idx` later passed to `decode`.
+/// The position of a path in `arr` is the `idx` later passed to `defmt_decoder_decode`.
 ///
 /// # Per-path status codes (written to `result_arr`)
 /// - `0`: success
@@ -22,13 +23,18 @@ use std::{
 /// - `-3`: the defmt table could not be parsed
 /// - `-4`: the file has no `.defmt` section
 ///
-/// A failed path does not fail the whole call; the other paths can still be decoded.
+/// A failed path does not prevent the other paths from loading; they can still be decoded.
 /// Missing location info (e.g. no debug info) is not an error, frames are then decoded without
 /// the `└─ module @ file:line` suffix.
 ///
 /// # Return value
-/// - `0`: success (check `result_arr` for the status of each path)
-/// - `-1`: `init` was already called; the new tables are discarded and the old ones kept
+/// - `0`: success, every path loaded
+/// - `-1`: `defmt_decoder_ctx_init` was already called; the new tables are discarded and the
+///   old ones kept. Takes precedence over `-2`
+/// - `-2`: at least one path failed to load, check `result_arr` for which ones. The other
+///   paths were loaded and can be decoded
+///
+/// `result_arr` is filled in for every return value.
 ///
 /// # Safety
 /// This function takes in an array of paths and an array of integers, so it's the caller's
@@ -38,7 +44,7 @@ use std::{
 /// 2. both pointers are non-zero
 /// 3. every string in the array is not a null pointer
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn init(
+pub unsafe extern "C" fn defmt_decoder_ctx_init(
     arr: *const *const c_char,
     len: usize,
     result_arr: *mut i32,
@@ -67,7 +73,7 @@ pub unsafe extern "C" fn init(
 /// Decodes a single defmt frame from the start of `input` into a human-readable string.
 ///
 /// # Parameters
-/// - `idx`: index of the ELF file in the `arr` passed to `init`
+/// - `idx`: index of the ELF file in the `arr` passed to `defmt_decoder_ctx_init`
 /// - `input`: raw defmt bytes, starting at a frame boundary
 /// - `input_len`: number of bytes in `input`
 /// - `output`: buffer that receives the formatted UTF-8 string (not NUL-terminated)
@@ -81,18 +87,18 @@ pub unsafe extern "C" fn init(
 /// - `>= 0`: success, the number of bytes written to `output`
 /// - `-1`: `output` is too small for the formatted string; nothing is written, retry with a
 ///   larger buffer
-/// - `-2`: the file at `idx` failed to initialize (see its status code from `init`)
-/// - `-3`: `init` has not been called yet
+/// - `-2`: the file at `idx` failed to load (see its status code from `defmt_decoder_ctx_init`)
+/// - `-3`: `defmt_decoder_ctx_init` has not been called yet
 /// - `-4`: `input` ends in the middle of a frame; retry once more bytes are available
-/// - `-5`: `input` does not contain a valid frame
-/// - `-6`: `idx` is out of bounds of the `arr` passed to `init`
+/// - `-5`: `input` does not start with a valid frame
+/// - `-6`: `idx` is out of bounds of the `arr` passed to `defmt_decoder_ctx_init`
 ///
 /// # Safety
 /// This function takes in an input byte array and an output byte buffer, so it's the caller's
 /// responsibility to make sure that the pointers and lengths are sound.
 /// The function asserts that the pointers are non-zero
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn decode(
+pub unsafe extern "C" fn defmt_decoder_decode(
     idx: usize,
     input: *const u8,
     input_len: usize,

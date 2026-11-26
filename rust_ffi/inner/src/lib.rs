@@ -2,29 +2,55 @@ use std::{ffi::CStr, sync::OnceLock};
 
 use defmt_decoder::{Locations, Table};
 
+/// Decoding state of a single ELF file
 #[derive(Clone, Debug)]
 struct DefmtCtx {
     table: Table,
+    /// `None` if the ELF has no (or unparsable) debug info
     locations: Option<Locations>,
 }
 
+/// One entry per path passed to `init_inner`, `None` if that path failed to load.
+/// Set once by `init_inner`, read by `decode_inner`
 static DEFMT_CTX_ARR: OnceLock<Vec<Option<DefmtCtx>>> = OnceLock::new();
 
+/// Per-path status codes written to the `result` array of `init_inner` (`0` on success)
 #[repr(i32)]
 enum InitArrErrCodes {
+    /// The path is not valid UTF-8
     StringEncodingErr = -1,
+    /// The file could not be read
     ReadFileErr = -2,
+    /// The defmt table could not be parsed
     TableParsingErr = -3,
+    /// The file has no `.defmt` section
     NoDefmtSectionFound = -4,
 }
 
+/// Return codes of `init_inner` (`0` on success)
 #[repr(i32)]
 enum InitErrCodes {
+    /// `init_inner` was already called; the new tables are discarded and the old ones kept
     CalledTwice = -1,
+    /// At least one path failed to load, see `result` for which ones.
+    /// The other paths were loaded and can be decoded
+    AtLeastOneEntryFailed = -2,
 }
 
+/// Loads the defmt table (and location info, if present) of each ELF file in `paths`.
+///
+/// `result[i]` receives the status of `paths[i]`: `0` on success, otherwise an
+/// `InitArrErrCodes`. The index of a path in `paths` is the `idx` later passed to
+/// `decode_inner`.
+///
+/// Returns `0` if every path loaded, otherwise an `InitErrCodes`. `CalledTwice` takes
+/// precedence over `AtLeastOneEntryFailed`; `result` is filled in either way.
+///
+/// # Panics
+/// If `result` is shorter than `paths`
 pub fn init_inner(paths: &[&CStr], result: &mut [i32]) -> i32 {
     let mut result_vec: Vec<Option<DefmtCtx>> = vec![None; paths.len()];
+    let mut failed: bool = false;
 
     for (idx, path) in paths.iter().enumerate() {
         let path = match path.to_str() {
@@ -32,6 +58,7 @@ pub fn init_inner(paths: &[&CStr], result: &mut [i32]) -> i32 {
             Err(e) => {
                 println!("Go Defmt Decoder: String Encoding Error: {}", e);
                 result[idx] = InitArrErrCodes::StringEncodingErr as i32;
+                failed = true;
                 continue;
             }
         };
@@ -41,6 +68,7 @@ pub fn init_inner(paths: &[&CStr], result: &mut [i32]) -> i32 {
             Err(e) => {
                 println!("Go Defmt Decoder: Read File Error: {}", e);
                 result[idx] = InitArrErrCodes::ReadFileErr as i32;
+                failed = true;
                 continue;
             }
         };
@@ -50,11 +78,13 @@ pub fn init_inner(paths: &[&CStr], result: &mut [i32]) -> i32 {
             Ok(None) => {
                 println!("Go Defmt Decoder: NoDefmtSectionFound");
                 result[idx] = InitArrErrCodes::NoDefmtSectionFound as i32;
+                failed = true;
                 continue;
             }
             Err(e) => {
                 println!("Go Defmt Decoder: Table Parsing Error: {}", e);
                 result[idx] = InitArrErrCodes::TableParsingErr as i32;
+                failed = true;
                 continue;
             }
         };
@@ -80,19 +110,38 @@ pub fn init_inner(paths: &[&CStr], result: &mut [i32]) -> i32 {
         return InitErrCodes::CalledTwice as i32;
     };
 
+    if failed {
+        return InitErrCodes::AtLeastOneEntryFailed as i32;
+    }
+
     0
 }
 
+/// Return codes of `decode_inner` (a non-negative value is the output length)
 #[repr(i32)]
 enum DecodeErrCodes {
+    /// `output` is too small for the formatted string; nothing is written
     OutputBufferTooSmall = -1,
+    /// The file at `idx` failed to load in `init_inner`
     EntryFailedToInitialize = -2,
+    /// `input` ends in the middle of a frame; retry once more bytes are available
     UnexpectedEOF = -4,
+    /// `input` does not start with a valid frame
     Malformed = -5,
+    /// `init_inner` has not been called yet
     CalledBeforeInit = -3,
+    /// `idx` is not smaller than the number of paths passed to `init_inner`
     IndexOutOfBounds = -6,
 }
 
+/// Decodes the frame at the start of `input` with the table of the file at `idx`, and writes
+/// it as a UTF-8 string (not NUL-terminated) to `output`. If location info is available, a
+/// `\n└─ module @ file:line` line is appended. If `colored` is true, the log level is wrapped
+/// in ANSI color codes, which count towards the output length.
+///
+/// On success, returns the number of bytes written to `output` and sets `consumed` to the
+/// number of input bytes the frame occupied. On error, returns a `DecodeErrCodes` and sets
+/// `consumed` to `0`.
 pub fn decode_inner(
     idx: usize,
     input: &[u8],

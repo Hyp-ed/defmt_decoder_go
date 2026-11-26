@@ -2,9 +2,15 @@ fn main() {
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let lib_name = std::env::var("CARGO_PKG_NAME").unwrap().replace('-', "_");
 
+    let config = cbindgen::Config {
+        language: cbindgen::Language::C,
+        usize_is_size_t: true,
+        ..Default::default()
+    };
+
     cbindgen::Builder::new()
         .with_crate(&crate_dir)
-        .with_language(cbindgen::Language::C)
+        .with_config(config)
         .generate()
         .expect("cbindgen failed")
         .write_to_file("include/defmt_decoder_wrapper.h");
