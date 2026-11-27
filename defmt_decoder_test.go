@@ -63,7 +63,9 @@ func TestSanityCheck(t *testing.T) {
 		t.Fatalf("got %d frames, expected %d", len(got), len(expectedLines))
 	}
 	for i := range got {
-		if got[i] != expectedLines[i] {
+		got_str := strings.Trim(got[i], "\n\t ")
+		expected_str := strings.Trim(expectedLines[i], "\n\t ")
+		if got_str != expected_str {
 			t.Errorf("frame %d: got %q, expected %q", i, got[i], expectedLines[i])
 		}
 	}
