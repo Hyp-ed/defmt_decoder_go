@@ -153,6 +153,17 @@ enum DecodeErrCodes {
     IndexOutOfBounds = -5,
 }
 
+/// Return codes of `decode_inner` (a non-negative value is the length of the formatted string)
+#[repr(i32)]
+enum ReceivedErrCodes {
+    /// The file at `idx` failed to load in `init_inner`
+    EntryFailedToInitialize = -1,
+    /// `init_inner` has not been called yet
+    CalledBeforeInit = -2,
+    /// `idx` is not smaller than the number of paths passed to `init_inner`
+    IndexOutOfBounds = -5,
+}
+
 /// Decodes the frame at the start of `input` with the table of the file at `idx`, and writes
 /// it as a UTF-8 string (not NUL-terminated) to `output`. If location info is available, a
 /// `\n└─ module @ file:line` line is appended.
@@ -162,9 +173,7 @@ enum DecodeErrCodes {
 /// `output`; if the returned length exceeds `output.len()`, nothing is written and the caller
 /// should retry with a buffer of at least that size. On error, returns a `DecodeErrCodes` and
 /// sets `consumed` to `0`.
-pub fn decode_inner(idx: usize, input: &[u8], output: &mut [u8], consumed: &mut usize) -> i32 {
-    *consumed = 0;
-
+pub fn decode_inner(idx: usize, output: &mut [u8]) -> i32 {
     // DECODER_ARR is set last, so DEFMT_CTX_ARR is set too if it is
     let Some(decoders) = DECODER_ARR.get() else {
         return DecodeErrCodes::CalledBeforeInit as i32;
@@ -183,10 +192,7 @@ pub fn decode_inner(idx: usize, input: &[u8], output: &mut [u8], consumed: &mut 
         unreachable!()
     };
 
-    println!("{:x?}", input);
-
     let mut g = decoder.lock().unwrap();
-    g.received(input);
 
     let frame = match g.decode() {
         Ok(f) => f,
@@ -217,11 +223,32 @@ pub fn decode_inner(idx: usize, input: &[u8], output: &mut [u8], consumed: &mut 
 
     let bytes = formatted.as_bytes();
     if bytes.len() > output.len() || bytes.len() > i32::MAX as usize {
-        *consumed = 0;
         return bytes.len() as i32;
     }
 
     output[..bytes.len()].copy_from_slice(bytes);
-    *consumed = 0;
     bytes.len() as i32
+}
+
+pub fn received_inner(idx: usize, input: &[u8]) -> i32 {
+    let Some(decoders) = DECODER_ARR.get() else {
+        return ReceivedErrCodes::CalledBeforeInit as i32;
+    };
+
+    let Some(entry) = decoders.get(idx) else {
+        return ReceivedErrCodes::IndexOutOfBounds as i32;
+    };
+
+    let Some(decoder) = entry else {
+        return ReceivedErrCodes::EntryFailedToInitialize as i32;
+    };
+
+    let Some(_) = &DEFMT_CTX_ARR.get().unwrap()[idx] else {
+        unreachable!()
+    };
+
+    let mut guard = decoder.lock().unwrap_or_else(|e| e.into_inner());
+    guard.received(input);
+
+    input.len() as i32
 }

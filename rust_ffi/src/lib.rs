@@ -1,8 +1,5 @@
 pub use inner::*;
-use std::{
-    ffi::{CStr, c_char},
-    ptr::{null, null_mut},
-};
+use std::ffi::{CStr, c_char};
 
 /// Loads the defmt tables of one or more ELF files. Must be called exactly once, before
 /// `defmt_decoder_decode`.
@@ -98,22 +95,24 @@ pub unsafe extern "C" fn defmt_decoder_ctx_init(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn defmt_decoder_decode(
     idx: usize,
-    input: *const u8,
-    input_len: usize,
     output: *mut u8,
     output_len: usize,
-    consumed: *mut usize,
 ) -> i32 {
-    assert_ne!(input, null());
-    assert_ne!(output, null_mut());
-    assert_ne!(consumed, null_mut());
+    assert!(!output.is_null());
 
-    unsafe {
-        decode_inner(
-            idx,
-            std::slice::from_raw_parts(input, input_len),
-            std::slice::from_raw_parts_mut(output, output_len),
-            &mut *consumed,
-        )
-    }
+    unsafe { decode_inner(idx, std::slice::from_raw_parts_mut(output, output_len)) }
+}
+
+/// # Safety
+/// This function takes
+///
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn defmt_decoder_received(
+    idx: usize,
+    input: *const u8,
+    input_len: usize,
+) -> i32 {
+    assert!(!input.is_null());
+
+    unsafe { received_inner(idx, std::slice::from_raw_parts(input, input_len)) }
 }

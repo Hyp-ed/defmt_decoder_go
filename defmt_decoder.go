@@ -14,6 +14,31 @@ import (
 	"unsafe"
 )
 
+type Decoder struct {
+	idx      int
+	buffered []byte
+}
+
+func (d *Decoder) Write(p []byte) (int, error) {
+	result := C.defmt_decoder_received(C.size_t(d.idx), (*(C.uint8_t))(&p[0]), C.size_t(len(p)))
+
+	if result < 0 {
+		return 0, &DecodeError{DecodeErrorCode(result)}
+	} else {
+		return int(result), nil
+	}
+}
+
+func (d *Decoder) Read(b []byte) (int, error) {
+	result := C.defmt_decoder_decode(C.size_t(d.idx), (*(C.uint8_t))(&p[0]), C.size_t(len(p)))
+
+	if result < 0 {
+		return 0, &DecodeError{DecodeErrorCode(result)}
+	} else {
+		return int(result), nil
+	}
+}
+
 // InitErrorCode is the overall result of Init.
 type InitErrorCode int
 
