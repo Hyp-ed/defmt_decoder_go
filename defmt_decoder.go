@@ -80,7 +80,7 @@ func (e *InitError) Error() string {
 // before Decode. The position of a path in paths is the index later passed to Decode.
 //
 // Returns nil if every path loaded.
-func Init(paths []string) *InitError {
+func Init(paths []string) error {
 	if len(paths) == 0 {
 		return new(InitError{NoPaths, make([]InitEntryErrorCode, 0)})
 	}
@@ -157,7 +157,7 @@ func (e *DecodeError) Error() string {
 //
 // Returns the formatted frame and the number of input bytes it occupied, so the next frame
 // starts at input[consumed:].
-func Decode(index int, input []uint8) (string, int, *DecodeError) {
+func Decode(index int, input []uint8) (string, int, error) {
 	if len(input) == 0 {
 		return "", 0, new(DecodeError{EmptyInput})
 	}

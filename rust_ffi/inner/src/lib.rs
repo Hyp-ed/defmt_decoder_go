@@ -1,9 +1,11 @@
-use std::{ffi::CStr, sync::OnceLock};
+use std::{
+    ffi::CStr,
+    sync::{Mutex, OnceLock},
+};
 
-use defmt_decoder::{Locations, Table};
+use defmt_decoder::{Locations, StreamDecoder, Table};
 
 /// Decoding state of a single ELF file
-#[derive(Clone, Debug)]
 struct DefmtCtx {
     table: Table,
     /// `None` if the ELF has no (or unparsable) debug info
@@ -13,6 +15,12 @@ struct DefmtCtx {
 /// One entry per path passed to `init_inner`, `None` if that path failed to load.
 /// Set once by `init_inner`, read by `decode_inner`
 static DEFMT_CTX_ARR: OnceLock<Vec<Option<DefmtCtx>>> = OnceLock::new();
+
+type Decoder = Mutex<Box<dyn StreamDecoder + Send + Sync + 'static>>;
+
+/// Stream decoders borrowing the tables in `DEFMT_CTX_ARR`, same indices and `None`s.
+/// Set by `init_inner` right after `DEFMT_CTX_ARR`
+static DECODER_ARR: OnceLock<Vec<Option<Decoder>>> = OnceLock::new();
 
 /// Per-path status codes written to the `result` array of `init_inner` (`0` on success)
 #[repr(i32)]
@@ -49,7 +57,10 @@ enum InitErrCodes {
 /// # Panics
 /// If `result` is shorter than `paths`
 pub fn init_inner(paths: &[&CStr], result: &mut [i32]) -> i32 {
-    let mut result_vec: Vec<Option<DefmtCtx>> = vec![None; paths.len()];
+    let mut result_vec: Vec<Option<DefmtCtx>> = vec![];
+    for _ in 0..paths.len() {
+        result_vec.push(None);
+    }
     let mut failed: bool = false;
 
     for (idx, path) in paths.iter().enumerate() {
@@ -103,12 +114,22 @@ pub fn init_inner(paths: &[&CStr], result: &mut [i32]) -> i32 {
         };
 
         result_vec[idx] = Some(DefmtCtx { table, locations });
+
         result[idx] = 0;
     }
 
     let Ok(_) = DEFMT_CTX_ARR.set(result_vec) else {
         return InitErrCodes::CalledTwice as i32;
     };
+
+    // DEFMT_CTX_ARR is now 'static, so the decoders can borrow from it
+    let ctx_arr: &'static [Option<DefmtCtx>] = DEFMT_CTX_ARR.get().unwrap();
+    let decoders = ctx_arr
+        .iter()
+        .map(|c| c.as_ref().map(|c| Mutex::new(c.table.new_stream_decoder())))
+        .collect();
+    // only the caller that won the set above gets here, so this can't fail
+    let _ = DECODER_ARR.set(decoders);
 
     if failed {
         return InitErrCodes::AtLeastOneEntryFailed as i32;
@@ -144,19 +165,30 @@ enum DecodeErrCodes {
 pub fn decode_inner(idx: usize, input: &[u8], output: &mut [u8], consumed: &mut usize) -> i32 {
     *consumed = 0;
 
-    let Some(ctx) = DEFMT_CTX_ARR.get() else {
+    // DECODER_ARR is set last, so DEFMT_CTX_ARR is set too if it is
+    let Some(decoders) = DECODER_ARR.get() else {
         return DecodeErrCodes::CalledBeforeInit as i32;
     };
 
-    let Some(entry) = ctx.get(idx) else {
+    let Some(entry) = decoders.get(idx) else {
         return DecodeErrCodes::IndexOutOfBounds as i32;
     };
 
-    let Some(ctx) = entry else {
+    let Some(decoder) = entry else {
         return DecodeErrCodes::EntryFailedToInitialize as i32;
     };
 
-    let (frame, frame_size) = match ctx.table.decode(input) {
+    // same indices and `None`s as DECODER_ARR
+    let Some(ctx) = &DEFMT_CTX_ARR.get().unwrap()[idx] else {
+        unreachable!()
+    };
+
+    println!("{:x?}", input);
+
+    let mut g = decoder.lock().unwrap();
+    g.received(input);
+
+    let frame = match g.decode() {
         Ok(f) => f,
         Err(e) => match e {
             defmt_decoder::DecodeError::UnexpectedEof => {
@@ -185,11 +217,11 @@ pub fn decode_inner(idx: usize, input: &[u8], output: &mut [u8], consumed: &mut 
 
     let bytes = formatted.as_bytes();
     if bytes.len() > output.len() || bytes.len() > i32::MAX as usize {
-        *consumed = frame_size;
+        *consumed = 0;
         return bytes.len() as i32;
     }
 
     output[..bytes.len()].copy_from_slice(bytes);
-    *consumed = frame_size;
+    *consumed = 0;
     bytes.len() as i32
 }
