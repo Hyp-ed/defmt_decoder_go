@@ -9,5 +9,11 @@ crate-type = ["cdylib", "staticlib"]
 [dependencies]
 inner = { path = "inner/" }
 
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "debuginfo"
+panic = "unwind"
+
 [build-dependencies]
 cbindgen = "0.29"
