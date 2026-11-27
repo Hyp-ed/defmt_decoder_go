@@ -11,11 +11,12 @@ struct DefmtCtx {
     table: Table,
     /// `None` if the ELF has no (or unparsable) debug info
     locations: Option<Locations>,
+    /// Formatted text of the last frame that didn't fit in `decode_inner`'s output
     buffered: Mutex<VecDeque<u8>>,
 }
 
 /// One entry per path passed to `init_inner`, `None` if that path failed to load.
-/// Set once by `init_inner`, read by `decode_inner`
+/// Set once by `init_inner`, read by `decode_inner` and `received_inner`
 static DEFMT_CTX_ARR: OnceLock<Vec<Option<DefmtCtx>>> = OnceLock::new();
 
 type Decoder = Mutex<Box<dyn StreamDecoder + Send + Sync + 'static>>;
@@ -51,7 +52,7 @@ enum InitErrCodes {
 ///
 /// `result[i]` receives the status of `paths[i]`: `0` on success, otherwise an
 /// `InitArrErrCodes`. The index of a path in `paths` is the `idx` later passed to
-/// `decode_inner`.
+/// `received_inner` and `decode_inner`.
 ///
 /// Returns `0` if every path loaded, otherwise an `InitErrCodes`. `CalledTwice` takes
 /// precedence over `AtLeastOneEntryFailed`; `result` is filled in either way.
@@ -144,22 +145,26 @@ pub fn init_inner(paths: &[&CStr], result: &mut [i32]) -> i32 {
     0
 }
 
-/// Return codes of `decode_inner` (a non-negative value is the length of the formatted string)
+/// Error codes of `decode_inner` (a non-negative value is the number of bytes written).
+/// Shares its values with `ReceivedErrCodes`
 #[repr(i32)]
 enum DecodeErrCodes {
     /// The file at `idx` failed to load in `init_inner`
     EntryFailedToInitialize = -1,
     /// `init_inner` has not been called yet
     CalledBeforeInit = -2,
-    /// `input` ends in the middle of a frame; retry once more bytes are available
+    /// No complete frame has been received yet and no text is left over; call again after
+    /// `received_inner` got more bytes. Not an error in a stream
     UnexpectedEOF = -3,
-    /// `input` does not start with a valid frame
+    /// The next frame was corrupt and has been skipped; the next call continues with the frame
+    /// after it
     Malformed = -4,
     /// `idx` is not smaller than the number of paths passed to `init_inner`
     IndexOutOfBounds = -5,
 }
 
-/// Return codes of `decode_inner` (a non-negative value is the length of the formatted string)
+/// Error codes of `received_inner` (a non-negative value is the number of bytes taken).
+/// Shares its values with `DecodeErrCodes`
 #[repr(i32)]
 enum ReceivedErrCodes {
     /// The file at `idx` failed to load in `init_inner`
@@ -170,15 +175,17 @@ enum ReceivedErrCodes {
     IndexOutOfBounds = -5,
 }
 
-/// Decodes the frame at the start of `input` with the table of the file at `idx`, and writes
-/// it as a UTF-8 string (not NUL-terminated) to `output`. If location info is available, a
-/// `\n└─ module @ file:line` line is appended.
+/// Reads decoded text from the stream of the file at `idx` into `output`, like a byte-stream
+/// read. The bytes come from `received_inner`.
 ///
-/// If a frame was decoded, returns the length of the formatted string and sets `consumed` to
-/// the number of input bytes the frame occupied. The string is written only if it fits in
-/// `output`; if the returned length exceeds `output.len()`, nothing is written and the caller
-/// should retry with a buffer of at least that size. On error, returns a `DecodeErrCodes` and
-/// sets `consumed` to `0`.
+/// Each frame is formatted as UTF-8 text ending in `\n`. If location info is available, a
+/// `└─ module @ file:line` line follows the message, before that `\n`. A frame that doesn't fit
+/// in `output` is split: the rest is kept and returned first by the next call, so frames
+/// always come out whole and in order, but one call may end mid-frame (or mid-character).
+///
+/// Returns the number of bytes written to `output` (`1..=output.len()`, or `0` if `output` is
+/// empty), otherwise a `DecodeErrCodes`. Leftover text from the previous frame is returned on
+/// its own, without decoding a new frame, so a decode error never hides it.
 pub fn decode_inner(idx: usize, output: &mut [u8]) -> i32 {
     // DECODER_ARR is set last, so DEFMT_CTX_ARR is set too if it is
     let Some(decoders) = DECODER_ARR.get() else {
@@ -274,6 +281,11 @@ pub fn decode_inner(idx: usize, output: &mut [u8]) -> i32 {
     (num_bytes_copied + bytes.len()) as i32
 }
 
+/// Adds `input`, raw bytes as sent by the target (in the encoding of the ELF at `idx`, e.g.
+/// rzCOBS), to the stream of the file at `idx`. They are buffered until `decode_inner` reads
+/// the frames out. `input` doesn't need to start or end at a frame boundary.
+///
+/// Returns the number of bytes taken (always `input.len()`), otherwise a `ReceivedErrCodes`.
 pub fn received_inner(idx: usize, input: &[u8]) -> i32 {
     let Some(decoders) = DECODER_ARR.get() else {
         return ReceivedErrCodes::CalledBeforeInit as i32;

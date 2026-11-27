@@ -1,7 +1,5 @@
 package defmt_decoder
 
-import "strings"
-
 /*
 #cgo CFLAGS: -I${SRCDIR}/build/include/
 #cgo LDFLAGS: -L${SRCDIR}/build/lib -ldefmt_decoder_wrapper
@@ -11,32 +9,100 @@ import "strings"
 import "C"
 import (
 	"fmt"
+	"io"
+	"log"
+	"math"
+	"strings"
+	"sync"
 	"unsafe"
 )
 
+// Decoder is the defmt stream of one ELF file passed to Init. Raw bytes from the target are
+// written to it, and the decoded frames are read back as text, one frame per line: the
+// message, then a "└─ module @ file:line" line if location info is available, each ending in
+// "\n". Wrap it in a bufio.Scanner to get one line at a time.
+//
+// Read blocks until a frame is available or Close is called. A Decoder is safe for concurrent
+// use, typically one goroutine writing and one reading.
 type Decoder struct {
-	idx      int
-	buffered []byte
+	idx    int
+	mu     sync.Mutex
+	cond   *sync.Cond // signalled by Write and Close, waited on by Read
+	closed bool
 }
 
+func newDecoder(idx int) *Decoder {
+	d := &Decoder{idx: idx}
+	d.cond = sync.NewCond(&d.mu)
+	return d
+}
+
+// Write adds raw bytes from the target to the stream. p doesn't need to start or end at a
+// frame boundary. It always takes all of p unless it returns an error, which is a
+// *DecodeError, or io.ErrClosedPipe after Close.
 func (d *Decoder) Write(p []byte) (int, error) {
-	result := C.defmt_decoder_received(C.size_t(d.idx), (*(C.uint8_t))(&p[0]), C.size_t(len(p)))
+	d.mu.Lock()
+	defer d.mu.Unlock()
 
-	if result < 0 {
-		return 0, &DecodeError{DecodeErrorCode(result)}
-	} else {
-		return int(result), nil
+	if d.closed {
+		return 0, io.ErrClosedPipe
+	}
+
+	// the C side counts in an int32
+	for written := 0; written < len(p); {
+		chunk := p[written:min(len(p), written+math.MaxInt32)]
+		result := C.defmt_decoder_received(C.size_t(d.idx), (*C.uint8_t)(unsafe.Pointer(&chunk[0])), C.size_t(len(chunk)))
+
+		if result < 0 {
+			return written, &DecodeError{DecodeErrorCode(result)}
+		}
+		written += len(chunk)
+	}
+
+	d.cond.Broadcast()
+	return len(p), nil
+}
+
+// Read reads decoded text into p. It blocks until at least one byte is available, and returns
+// io.EOF once Close was called and every complete frame has been read; bytes of an incomplete
+// last frame are dropped. Corrupt frames are logged and skipped. A frame longer than p is
+// split across Reads. Any other error is a *DecodeError.
+func (d *Decoder) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	for {
+		result := C.defmt_decoder_decode(C.size_t(d.idx), (*C.uint8_t)(unsafe.Pointer(&p[0])), C.size_t(len(p)))
+
+		switch {
+		case result > 0:
+			return int(result), nil
+		case DecodeErrorCode(result) == noFrameYet:
+			if d.closed {
+				return 0, io.EOF
+			}
+			d.cond.Wait() // releases mu until Write or Close
+		case DecodeErrorCode(result) == malformedFrame:
+			log.Printf("defmt_decoder: skipped a malformed frame on decoder %d", d.idx)
+		default:
+			return 0, &DecodeError{DecodeErrorCode(result)}
+		}
 	}
 }
 
-func (d *Decoder) Read(b []byte) (int, error) {
-	result := C.defmt_decoder_decode(C.size_t(d.idx), (*(C.uint8_t))(&p[0]), C.size_t(len(p)))
+// Close ends the stream: a blocked Read returns io.EOF once every complete frame has been
+// read, and later Writes fail with io.ErrClosedPipe. It always returns nil.
+func (d *Decoder) Close() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 
-	if result < 0 {
-		return 0, &DecodeError{DecodeErrorCode(result)}
-	} else {
-		return int(result), nil
-	}
+	d.closed = true
+	d.cond.Broadcast()
+	return nil
 }
 
 // InitErrorCode is the overall result of Init.
@@ -52,12 +118,6 @@ const (
 	NoPaths InitErrorCode = -3
 )
 
-// InitError is returned by Init. For ErrorInAtLeastOneEntry, err_codes[i] is the status of paths[i].
-type InitError struct {
-	code      InitErrorCode
-	err_codes []InitEntryErrorCode
-}
-
 // InitEntryErrorCode is the load status of a single path passed to Init.
 type InitEntryErrorCode int
 
@@ -69,45 +129,69 @@ const (
 	NoDefmtSectionFound InitEntryErrorCode = -4 // the file has no .defmt section
 )
 
-func (e *InitError) Error() string {
-	switch e.code {
-	case InitTwice:
-		return "Init cannot be called twice"
-	case ErrorInAtLeastOneEntry:
-		var result strings.Builder
-		result.WriteString("At least one entry has failed: error codes: [\n")
-		for i := 0; i < len(e.err_codes); i++ {
-			switch e.err_codes[i] {
-			case NoError:
-				fmt.Fprintf(&result, "\t%d: No error,", i)
-			case StringEncodingError:
-				fmt.Fprintf(&result, "\t%d: String encoding error,", i)
-			case ReadFileError:
-				fmt.Fprintf(&result, "\t%d: Read file error,", i)
-			case TableParsingError:
-				fmt.Fprintf(&result, "\t%d: Table parsing error,", i)
-			case NoDefmtSectionFound:
-				fmt.Fprintf(&result, "\t%d: No defmt section found,", i)
-			default:
-				fmt.Fprintf(&result, "\t%d,", i)
-			}
-		}
-		result.WriteString("]")
-		return result.String()
-	case NoPaths:
-		return "Init must be called with at least one path"
+func (c InitEntryErrorCode) String() string {
+	switch c {
+	case NoError:
+		return "no error"
+	case StringEncodingError:
+		return "path is not valid UTF-8"
+	case ReadFileError:
+		return "file could not be read"
+	case TableParsingError:
+		return "defmt table could not be parsed"
+	case NoDefmtSectionFound:
+		return "no .defmt section found"
 	default:
-		return "Unknown error"
+		return fmt.Sprintf("unknown error %d", int(c))
 	}
 }
 
-// Init loads the defmt tables of the ELF files at paths. It must be called exactly once,
-// before Decode. The position of a path in paths is the index later passed to Decode.
+// InitError is returned by Init.
+type InitError struct {
+	code       InitErrorCode
+	entryCodes []InitEntryErrorCode
+}
+
+// Code returns why Init failed.
+func (e *InitError) Code() InitErrorCode {
+	return e.code
+}
+
+// EntryCodes returns the load status of each path passed to Init, in the same order, for
+// ErrorInAtLeastOneEntry. It is empty for the other codes.
+func (e *InitError) EntryCodes() []InitEntryErrorCode {
+	return e.entryCodes
+}
+
+func (e *InitError) Error() string {
+	switch e.code {
+	case InitTwice:
+		return "defmt_decoder: Init cannot be called twice"
+	case ErrorInAtLeastOneEntry:
+		var result strings.Builder
+		result.WriteString("defmt_decoder: at least one path failed to load:")
+		for i, code := range e.entryCodes {
+			if code != NoError {
+				fmt.Fprintf(&result, "\n\t%d: %s", i, code)
+			}
+		}
+		return result.String()
+	case NoPaths:
+		return "defmt_decoder: Init must be called with at least one path"
+	default:
+		return fmt.Sprintf("defmt_decoder: unknown Init error %d", int(e.code))
+	}
+}
+
+// Init loads the defmt tables of the ELF files at paths and returns one Decoder per path, in
+// the same order. It must be called exactly once.
 //
-// Returns nil if every path loaded.
-func Init(paths []string) error {
+// If some paths fail to load, it returns an *InitError with code ErrorInAtLeastOneEntry along
+// with the decoders: the failed paths' entries are nil and the others can be used. For any
+// other error the decoders are nil.
+func Init(paths []string) ([]*Decoder, error) {
 	if len(paths) == 0 {
-		return new(InitError{NoPaths, make([]InitEntryErrorCode, 0)})
+		return nil, &InitError{code: NoPaths}
 	}
 
 	raw_paths := make([]*C.char, len(paths))
@@ -117,103 +201,64 @@ func Init(paths []string) error {
 		defer C.free(unsafe.Pointer(raw_paths[i]))
 	}
 
-	raw_paths_start := &raw_paths[0]
-
 	result := make([]C.int32_t, len(paths))
 
-	code := C.defmt_decoder_ctx_init(raw_paths_start, C.size_t(len(raw_paths)), &result[0], C.size_t(len(result)))
-
-	if code == 0 {
-		return nil
-	}
+	code := C.defmt_decoder_ctx_init(&raw_paths[0], C.size_t(len(raw_paths)), &result[0], C.size_t(len(result)))
 
 	if InitErrorCode(code) == InitTwice {
-		return new(InitError{InitTwice, make([]InitEntryErrorCode, 0)})
+		return nil, &InitError{code: InitTwice}
 	}
 
-	error := new(InitError{ErrorInAtLeastOneEntry, make([]InitEntryErrorCode, 0)})
+	decoders := make([]*Decoder, len(paths))
+	entryCodes := make([]InitEntryErrorCode, len(paths))
 
-	for _, err_code := range result {
-		error.err_codes = append(error.err_codes, InitEntryErrorCode(err_code))
+	for i, entryCode := range result {
+		entryCodes[i] = InitEntryErrorCode(entryCode)
+		if entryCodes[i] == NoError {
+			decoders[i] = newDecoder(i)
+		}
 	}
 
-	return error
+	if code == 0 {
+		return decoders, nil
+	}
+
+	return decoders, &InitError{code: ErrorInAtLeastOneEntry, entryCodes: entryCodes}
 }
 
-// DecodeError is returned by Decode.
+// DecodeErrorCode is the reason a Decoder's Read or Write failed.
+type DecodeErrorCode int
+
+const (
+	EntryFailedToInitialize DecodeErrorCode = -1 // the Decoder's file failed to load in Init
+	CalledBeforeInit        DecodeErrorCode = -2 // Init has not been called yet
+	IndexOutOfBounds        DecodeErrorCode = -5 // the Decoder's index is not smaller than the number of paths passed to Init
+
+	// handled inside Read, never returned
+	noFrameYet     DecodeErrorCode = -3 // no complete frame received yet
+	malformedFrame DecodeErrorCode = -4 // the next frame was corrupt and has been skipped
+)
+
+// DecodeError is returned by a Decoder's Read and Write. Decoders returned by Init only hit it
+// if the Rust side and this package disagree, so it indicates a bug rather than bad input.
 type DecodeError struct {
 	code DecodeErrorCode
 }
 
-// DecodeErrorCode is the reason Decode failed.
-type DecodeErrorCode int
-
-const (
-	EntryFailedToInitialize DecodeErrorCode = -1 // the file at index failed to load in Init
-	CalledBeforeInit        DecodeErrorCode = -2 // Init has not been called yet
-	UnexpectedEOF           DecodeErrorCode = -3 // input ends mid-frame; retry once more bytes are available
-	Malformed               DecodeErrorCode = -4 // input does not start with a valid frame
-	IndexOutOfBounds        DecodeErrorCode = -5 // index is not smaller than the number of paths passed to Init
-	EmptyInput              DecodeErrorCode = -6 // input is empty
-)
+// Code returns why the Read or Write failed.
+func (e *DecodeError) Code() DecodeErrorCode {
+	return e.code
+}
 
 func (e *DecodeError) Error() string {
 	switch e.code {
 	case EntryFailedToInitialize:
-		return "The entry at this index failed to initialize"
+		return "defmt_decoder: the file of this decoder failed to load"
 	case CalledBeforeInit:
-		return "Decode cannot be called before Init"
-	case UnexpectedEOF:
-		return "Unexpected EOF: input ends in the middle of a frame"
-	case Malformed:
-		return "Malformed frame"
+		return "defmt_decoder: decoder used before Init"
 	case IndexOutOfBounds:
-		return "Index out of bounds"
-	case EmptyInput:
-		return "Input cannot be empty"
+		return "defmt_decoder: decoder index out of bounds"
 	default:
-		return "Unknown error"
+		return fmt.Sprintf("defmt_decoder: unknown decode error %d", int(e.code))
 	}
-}
-
-// Decode decodes the defmt frame at the start of input with the table of the file at index
-// (its position in the paths passed to Init). If location info is available, a
-// "\n└─ module @ file:line" line is appended.
-//
-// Returns the formatted frame and the number of input bytes it occupied, so the next frame
-// starts at input[consumed:].
-func Decode(index int, input []uint8) (string, int, error) {
-	if len(input) == 0 {
-		return "", 0, new(DecodeError{EmptyInput})
-	}
-
-	const BUFFER_SIZE int = 32
-	output := make([]C.uint8_t, BUFFER_SIZE)
-	consumed := C.size_t(0)
-
-	result := C.defmt_decoder_decode(C.size_t(index), (*C.uint8_t)(&input[0]), C.size_t(len(input)), &output[0], C.size_t(len(output)), &consumed)
-
-	if result < 0 {
-		error_code := DecodeErrorCode(result)
-		return "", 0, new(DecodeError{error_code})
-	}
-
-	if int(result) > len(output) {
-		output = make([]C.uint8_t, result)
-		result = C.defmt_decoder_decode(
-			C.size_t(index),
-			(*C.uint8_t)(&input[0]),
-			C.size_t(len(input)),
-			&output[0],
-			C.size_t(len(output)),
-			&consumed,
-		)
-
-		if result < 0 {
-			error_code := DecodeErrorCode(result)
-			return "", 0, new(DecodeError{error_code})
-		}
-	}
-
-	return string(output[:result]), int(consumed), nil
 }

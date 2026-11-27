@@ -1,8 +1,8 @@
 pub use inner::*;
 use std::ffi::{CStr, c_char};
 
-/// Loads the defmt tables of one or more ELF files. Must be called exactly once, before
-/// `defmt_decoder_decode`.
+/// Loads the defmt tables of one or more ELF files and sets up one stream per file. Must be
+/// called exactly once, before `defmt_decoder_received` and `defmt_decoder_decode`.
 ///
 /// # Parameters
 /// - `arr`: array of `len` NUL-terminated, UTF-8 file paths to ELF files with a `.defmt` section
@@ -11,7 +11,8 @@ use std::ffi::{CStr, c_char};
 ///   (`result_arr[i]` corresponds to `arr[i]`)
 /// - `result_len`: length of `result_arr`, must equal `len`
 ///
-/// The position of a path in `arr` is the `idx` later passed to `defmt_decoder_decode`.
+/// The position of a path in `arr` is the `idx` later passed to `defmt_decoder_received` and
+/// `defmt_decoder_decode`.
 ///
 /// # Per-path status codes (written to `result_arr`)
 /// - `0`: success
@@ -36,9 +37,9 @@ use std::ffi::{CStr, c_char};
 /// # Safety
 /// This function takes in an array of paths and an array of integers, so it's the caller's
 /// responsibility to make sure that the pointers and lengths are sound.
-/// The function asserts that:
+/// The function asserts that (a failed assertion aborts the process):
 /// 1. the lengths are the same
-/// 2. both pointers are non-zero
+/// 2. both pointers are non-null
 /// 3. every string in the array is not a null pointer
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn defmt_decoder_ctx_init(
@@ -67,31 +68,33 @@ pub unsafe extern "C" fn defmt_decoder_ctx_init(
     }
 }
 
-/// Decodes a single defmt frame from the start of `input` into a human-readable string.
+/// Reads decoded text from the stream of the ELF file at `idx`, like a byte-stream read. Bytes
+/// go into the stream with `defmt_decoder_received`.
+///
+/// Each frame is formatted as UTF-8 text ending in `\n` (not NUL-terminated). If location info
+/// is available, a `└─ module @ file:line` line follows the message, before that `\n`. A frame
+/// that doesn't fit in `output` is split: the rest is returned first by the next call, so frames
+/// come out whole and in order, but one call may end mid-frame (or mid-character).
 ///
 /// # Parameters
 /// - `idx`: index of the ELF file in the `arr` passed to `defmt_decoder_ctx_init`
-/// - `input`: raw defmt bytes, starting at a frame boundary
-/// - `input_len`: number of bytes in `input`
-/// - `output`: buffer that receives the formatted UTF-8 string (not NUL-terminated)
-/// - `output_len`: size of `output` in bytes
-/// - `consumed`: if a frame was decoded, receives the number of input bytes the frame occupied,
-///   so the next frame starts at `input + *consumed`; set to `0` on any error
+/// - `output`: buffer that receives the text
+/// - `output_len`: size of `output` in bytes. Values above `INT32_MAX` are treated as `INT32_MAX`
 ///
 /// # Return value
-/// - `>= 0`: the length in bytes of the formatted string. If it is `<= output_len`, the string
-///   was written to `output`. Otherwise `output` is too small and nothing is written; retry
-///   with a buffer of at least the returned size (`consumed` is still set)
+/// - `> 0`: number of bytes written to `output`
+/// - `0`: only if `output_len` is `0`
 /// - `-1`: the file at `idx` failed to load (see its status code from `defmt_decoder_ctx_init`)
 /// - `-2`: `defmt_decoder_ctx_init` has not been called yet
-/// - `-3`: `input` ends in the middle of a frame; retry once more bytes are available
-/// - `-4`: `input` does not start with a valid frame
+/// - `-3`: no complete frame has been received yet; call again after `defmt_decoder_received`.
+///   Not an error in a stream
+/// - `-4`: the next frame was corrupt and has been skipped; call again to continue with the
+///   frame after it
 /// - `-5`: `idx` is out of bounds of the `arr` passed to `defmt_decoder_ctx_init`
 ///
 /// # Safety
-/// This function takes in an input byte array and an output byte buffer, so it's the caller's
-/// responsibility to make sure that the pointers and lengths are sound.
-/// The function asserts that the pointers are non-zero
+/// `output` must be valid for writes of `output_len` bytes. The function asserts that `output`
+/// is non-null; a failed assertion aborts the process
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn defmt_decoder_decode(
     idx: usize,
@@ -100,12 +103,30 @@ pub unsafe extern "C" fn defmt_decoder_decode(
 ) -> i32 {
     assert!(!output.is_null());
 
+    // the return value is an i32, so never write more than it can count
+    let output_len = output_len.min(i32::MAX as usize);
+
     unsafe { decode_inner(idx, std::slice::from_raw_parts_mut(output, output_len)) }
 }
 
-/// # Safety
-/// This function takes
+/// Adds raw bytes, as sent by the target, to the stream of the ELF file at `idx`. They are
+/// buffered until `defmt_decoder_decode` reads the frames out, so `input` doesn't need to start
+/// or end at a frame boundary. The encoding (e.g. rzCOBS) is the one the ELF was built with.
 ///
+/// # Parameters
+/// - `idx`: index of the ELF file in the `arr` passed to `defmt_decoder_ctx_init`
+/// - `input`: raw bytes from the target
+/// - `input_len`: number of bytes in `input`, at most `INT32_MAX`
+///
+/// # Return value
+/// - `>= 0`: number of bytes taken, always `input_len`
+/// - `-1`: the file at `idx` failed to load (see its status code from `defmt_decoder_ctx_init`)
+/// - `-2`: `defmt_decoder_ctx_init` has not been called yet
+/// - `-5`: `idx` is out of bounds of the `arr` passed to `defmt_decoder_ctx_init`
+///
+/// # Safety
+/// `input` must be valid for reads of `input_len` bytes. The function asserts that `input` is
+/// non-null (even if `input_len` is `0`); a failed assertion aborts the process
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn defmt_decoder_received(
     idx: usize,

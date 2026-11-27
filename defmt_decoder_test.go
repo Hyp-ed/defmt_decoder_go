@@ -1,18 +1,24 @@
 package defmt_decoder
 
 import (
-	"fmt"
+	"bufio"
+	"io"
 	"os"
+	"strings"
 	"testing"
 )
+
+var decoders []*Decoder
 
 func TestMain(m *testing.M) {
 	paths := make([]string, 1)
 	paths[0] = "./testdata/renode_test.elf"
-	mainInitErr := Init(paths)
 
-	if mainInitErr != nil {
-		println(mainInitErr.Error())
+	var err error
+	decoders, err = Init(paths)
+
+	if err != nil {
+		println(err.Error())
 	}
 
 	code := m.Run()
@@ -21,25 +27,44 @@ func TestMain(m *testing.M) {
 
 func TestSanityCheck(t *testing.T) {
 	file, err := os.Open("./testdata/defmt_stream.bin")
-
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer file.Close()
 
-	bytes := make([]byte, 0x4)
-	_, error := file.Read(bytes)
+	dec := decoders[0]
 
-	if error != nil {
-		t.Fatal(err)
-	}
+	go func() {
+		if _, err := io.Copy(dec, file); err != nil {
+			t.Error(err)
+		}
+		dec.Close()
+	}()
 
-	fmt.Printf("%08x\n", bytes)
-
-	str, _, err := Decode(0, bytes)
-
+	expected, err := os.ReadFile("./testdata/expected.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
+	expectedLines := strings.Split(strings.TrimRight(string(expected), "\n"), "\n")
 
-	fmt.Printf("%s", str)
+	var got []string
+	scanner := bufio.NewScanner(dec)
+	for scanner.Scan() {
+		// expected.txt has no location info
+		if !strings.HasPrefix(scanner.Text(), "└─") {
+			got = append(got, scanner.Text())
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got) != len(expectedLines) {
+		t.Fatalf("got %d frames, expected %d", len(got), len(expectedLines))
+	}
+	for i := range got {
+		if got[i] != expectedLines[i] {
+			t.Errorf("frame %d: got %q, expected %q", i, got[i], expectedLines[i])
+		}
+	}
 }
