@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     ffi::CStr,
     sync::{Mutex, OnceLock},
 };
@@ -10,6 +11,7 @@ struct DefmtCtx {
     table: Table,
     /// `None` if the ELF has no (or unparsable) debug info
     locations: Option<Locations>,
+    buffered: Mutex<VecDeque<u8>>,
 }
 
 /// One entry per path passed to `init_inner`, `None` if that path failed to load.
@@ -113,7 +115,11 @@ pub fn init_inner(paths: &[&CStr], result: &mut [i32]) -> i32 {
             }
         };
 
-        result_vec[idx] = Some(DefmtCtx { table, locations });
+        result_vec[idx] = Some(DefmtCtx {
+            table,
+            locations,
+            buffered: Mutex::new(vec![].into()),
+        });
 
         result[idx] = 0;
     }
@@ -192,18 +198,47 @@ pub fn decode_inner(idx: usize, output: &mut [u8]) -> i32 {
         unreachable!()
     };
 
+    let mut buffered = ctx.buffered.lock().unwrap_or_else(|e| e.into_inner());
+
+    let mut num_bytes_copied = 0;
+
+    if !buffered.is_empty() {
+        for i in output.iter_mut() {
+            *i = match buffered.pop_front() {
+                Some(b) => {
+                    num_bytes_copied += 1;
+                    b
+                }
+                None => break,
+            }
+        }
+    }
+
+    if num_bytes_copied >= output.len() {
+        return num_bytes_copied as i32;
+    }
+
+    let remaining_len = output.len() - num_bytes_copied;
+
     let mut g = decoder.lock().unwrap();
 
     let frame = match g.decode() {
         Ok(f) => f,
-        Err(e) => match e {
-            defmt_decoder::DecodeError::UnexpectedEof => {
-                return DecodeErrCodes::UnexpectedEOF as i32;
+        // no full frame yet: hand back the leftovers if there are any
+        Err(defmt_decoder::DecodeError::UnexpectedEof) => {
+            if num_bytes_copied > 0 {
+                return num_bytes_copied as i32;
             }
-            defmt_decoder::DecodeError::Malformed => {
-                return DecodeErrCodes::Malformed as i32;
+            return DecodeErrCodes::UnexpectedEOF as i32;
+        }
+        // the decoder already skipped the bad frame, so this isn't fatal
+        Err(defmt_decoder::DecodeError::Malformed) => {
+            if num_bytes_copied > 0 {
+                println!("Go Defmt Decoder: Malformed frame skipped");
+                return num_bytes_copied as i32;
             }
-        },
+            return DecodeErrCodes::Malformed as i32;
+        }
     };
 
     let mut formatted = frame.display(false).to_string();
@@ -221,13 +256,22 @@ pub fn decode_inner(idx: usize, output: &mut [u8]) -> i32 {
         ));
     }
 
+    formatted.push('\n');
+
     let bytes = formatted.as_bytes();
-    if bytes.len() > output.len() || bytes.len() > i32::MAX as usize {
-        return bytes.len() as i32;
+    if bytes.len() > remaining_len {
+        for b in bytes[remaining_len..].iter() {
+            buffered.push_back(*b);
+        }
+
+        output[num_bytes_copied..(num_bytes_copied + remaining_len)]
+            .copy_from_slice(&bytes[..remaining_len]);
+
+        return output.len() as i32;
     }
 
-    output[..bytes.len()].copy_from_slice(bytes);
-    bytes.len() as i32
+    output[num_bytes_copied..(num_bytes_copied + bytes.len())].copy_from_slice(bytes);
+    (num_bytes_copied + bytes.len()) as i32
 }
 
 pub fn received_inner(idx: usize, input: &[u8]) -> i32 {
