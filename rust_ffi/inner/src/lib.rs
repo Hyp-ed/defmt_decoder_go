@@ -70,7 +70,7 @@ pub fn init_inner(paths: &[&CStr], result: &mut [i32]) -> i32 {
         let path = match path.to_str() {
             Ok(res) => res,
             Err(e) => {
-                println!("Go Defmt Decoder: String Encoding Error: {}", e);
+                eprintln!("Go Defmt Decoder: String Encoding Error: {}", e);
                 result[idx] = InitArrErrCodes::StringEncodingErr as i32;
                 failed = true;
                 continue;
@@ -80,7 +80,7 @@ pub fn init_inner(paths: &[&CStr], result: &mut [i32]) -> i32 {
         let content = match std::fs::read(path) {
             Ok(a) => a,
             Err(e) => {
-                println!("Go Defmt Decoder: Read File Error: {}", e);
+                eprintln!("Go Defmt Decoder: Read File Error: {}", e);
                 result[idx] = InitArrErrCodes::ReadFileErr as i32;
                 failed = true;
                 continue;
@@ -90,13 +90,13 @@ pub fn init_inner(paths: &[&CStr], result: &mut [i32]) -> i32 {
         let table = match Table::parse(&content) {
             Ok(Some(t)) => t,
             Ok(None) => {
-                println!("Go Defmt Decoder: NoDefmtSectionFound");
+                eprintln!("Go Defmt Decoder: NoDefmtSectionFound");
                 result[idx] = InitArrErrCodes::NoDefmtSectionFound as i32;
                 failed = true;
                 continue;
             }
             Err(e) => {
-                println!("Go Defmt Decoder: Table Parsing Error: {}", e);
+                eprintln!("Go Defmt Decoder: Table Parsing Error: {}", e);
                 result[idx] = InitArrErrCodes::TableParsingErr as i32;
                 failed = true;
                 continue;
@@ -107,11 +107,11 @@ pub fn init_inner(paths: &[&CStr], result: &mut [i32]) -> i32 {
         let locations = match table.get_locations(&content) {
             Ok(l) if !l.is_empty() => Some(l),
             Ok(_) => {
-                println!("Go Defmt Decoder: No location info found (missing debug info?)");
+                eprintln!("Go Defmt Decoder: No location info found (missing debug info?)");
                 None
             }
             Err(e) => {
-                println!("Go Defmt Decoder: Location Parsing Error: {}", e);
+                eprintln!("Go Defmt Decoder: Location Parsing Error: {}", e);
                 None
             }
         };
@@ -227,7 +227,7 @@ pub fn decode_inner(idx: usize, output: &mut [u8]) -> i32 {
 
     let remaining_len = output.len() - num_bytes_copied;
 
-    let mut g = decoder.lock().unwrap();
+    let mut g = decoder.lock().unwrap_or_else(|e| e.into_inner());
 
     let frame = match g.decode() {
         Ok(f) => f,
@@ -241,7 +241,7 @@ pub fn decode_inner(idx: usize, output: &mut [u8]) -> i32 {
         // the decoder already skipped the bad frame, so this isn't fatal
         Err(defmt_decoder::DecodeError::Malformed) => {
             if num_bytes_copied > 0 {
-                println!("Go Defmt Decoder: Malformed frame skipped");
+                eprintln!("Go Defmt Decoder: Malformed frame skipped");
                 return num_bytes_copied as i32;
             }
             return DecodeErrCodes::Malformed as i32;

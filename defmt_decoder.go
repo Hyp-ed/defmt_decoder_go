@@ -116,6 +116,9 @@ const (
 	ErrorInAtLeastOneEntry InitErrorCode = -2
 	// NoPaths means Init was called with no paths. Nothing is loaded and Init can be called again.
 	NoPaths InitErrorCode = -3
+	// InitPanicked means the Rust side panicked; the reason was printed to stderr. Nothing
+	// usable was loaded.
+	InitPanicked InitErrorCode = -6 // DEFMT_DECODER_PANICKED
 )
 
 // InitEntryErrorCode is the load status of a single path passed to Init.
@@ -178,6 +181,8 @@ func (e *InitError) Error() string {
 		return result.String()
 	case NoPaths:
 		return "defmt_decoder: Init must be called with at least one path"
+	case InitPanicked:
+		return "defmt_decoder: Init panicked on the Rust side, see stderr for the reason"
 	default:
 		return fmt.Sprintf("defmt_decoder: unknown Init error %d", int(e.code))
 	}
@@ -205,8 +210,9 @@ func Init(paths []string) ([]*Decoder, error) {
 
 	code := C.defmt_decoder_ctx_init(&raw_paths[0], C.size_t(len(raw_paths)), &result[0], C.size_t(len(result)))
 
-	if InitErrorCode(code) == InitTwice {
-		return nil, &InitError{code: InitTwice}
+	switch InitErrorCode(code) {
+	case InitTwice, InitPanicked:
+		return nil, &InitError{code: InitErrorCode(code)}
 	}
 
 	decoders := make([]*Decoder, len(paths))
@@ -233,6 +239,7 @@ const (
 	EntryFailedToInitialize DecodeErrorCode = -1 // the Decoder's file failed to load in Init
 	CalledBeforeInit        DecodeErrorCode = -2 // Init has not been called yet
 	IndexOutOfBounds        DecodeErrorCode = -5 // the Decoder's index is not smaller than the number of paths passed to Init
+	DecodePanicked          DecodeErrorCode = -6 // the Rust side panicked, the reason was printed to stderr (DEFMT_DECODER_PANICKED)
 
 	// handled inside Read, never returned
 	noFrameYet     DecodeErrorCode = -3 // no complete frame received yet
@@ -240,7 +247,8 @@ const (
 )
 
 // DecodeError is returned by a Decoder's Read and Write. Decoders returned by Init only hit it
-// if the Rust side and this package disagree, so it indicates a bug rather than bad input.
+// if the Rust side panicked (DecodePanicked) or disagrees with this package, so it indicates a
+// bug rather than bad input.
 type DecodeError struct {
 	code DecodeErrorCode
 }
@@ -258,6 +266,8 @@ func (e *DecodeError) Error() string {
 		return "defmt_decoder: decoder used before Init"
 	case IndexOutOfBounds:
 		return "defmt_decoder: decoder index out of bounds"
+	case DecodePanicked:
+		return "defmt_decoder: panicked on the Rust side, see stderr for the reason"
 	default:
 		return fmt.Sprintf("defmt_decoder: unknown decode error %d", int(e.code))
 	}
