@@ -13,6 +13,7 @@ inner = { path = "inner/" }
 lto = true
 codegen-units = 1
 strip = "debuginfo"
+debug = 0
 panic = "unwind"
 
 [build-dependencies]
