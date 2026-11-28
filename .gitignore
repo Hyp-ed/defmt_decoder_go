@@ -1,2 +1,3 @@
 defmt_decoder_go
 build/
+build-dev/
