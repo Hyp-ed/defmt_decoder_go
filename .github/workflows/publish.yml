@@ -21,7 +21,59 @@ jobs:
         with: 
           go-version-file: "go.mod"
           cache-dependency-path: go.mod
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: runner.os != 'Windows'
+
+      # cgo links with MinGW, so the cdylib must be built for the GNU target
+      - uses: dtolnay/rust-toolchain@stable
+        if: runner.os == 'Windows'
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust_ffi
+
+      - name: Build (Linux, macOS)
+        if: runner.os != 'Windows'
+        run: make build_rust
+
+      - name: Test (Linux, macOS)
+        if: runner.os != 'Windows'
+        run: go test -v ./
           
+      # MSYS2 provides a known MinGW-w64 gcc (for cgo and as the linker for the Rust GNU
+      # target) plus make, cp, mkdir -p. path-type: inherit keeps the go and cargo installed
+      # by the steps above on PATH.
+      - uses: msys2/setup-msys2@v2
+        if: runner.os == 'Windows'
+        with:
+          msystem: MINGW64
+          path-type: inherit
+          update: false
+          install: >-
+            make
+            mingw-w64-x86_64-gcc
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        env:
+          # makes cargo output go to rust_ffi/target/x86_64-pc-windows-gnu/release (see Makefile)
+          CARGO_BUILD_TARGET: x86_64-pc-windows-gnu
+        run: |
+          gcc --version
+          make build_rust
+
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        env:
+          CGO_ENABLED: "1"
+          CC: gcc
+        run: |
+          go test -v ./
     
   publish:
     name: "Publish to GO"

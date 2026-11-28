@@ -7,13 +7,8 @@ else
 endif
 LIB_NAME := defmt_decoder_wrapper
 
-ifeq ($(OS),Windows_NT)
-	LIB_FILES := $(RUST_OUT)/$(LIB_NAME).a
-# else ifeq ($(shell uname -s),Darwin)
-	# LIB_FILES := $(RUST_OUT)/lib$(LIB_NAME).dylib
-else
-	LIB_FILES := $(RUST_OUT)/lib$(LIB_NAME).a
-endif
+# the static library is lib<name>.a on every target, the *-pc-windows-gnu one included
+LIB_FILES := $(RUST_OUT)/lib$(LIB_NAME).a
 
 ifeq ($(OS),Windows_NT)
 	DEST_DIR := windows_amd64
