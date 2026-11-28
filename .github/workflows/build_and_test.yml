@@ -51,14 +51,15 @@ jobs:
         with:
           workspaces: rust_ffi
 
-      # `make strip` builds first, so the tests run against the exact files that get committed
+      # `make build_release` builds and strips into build/, so the tests run against the exact
+      # files that get committed
       - name: Build and strip (Linux, macOS)
         if: runner.os != 'Windows'
-        run: make strip
+        run: make build_release
 
       - name: Test (Linux, macOS)
         if: runner.os != 'Windows'
-        run: go test -v ./
+        run: go test -v ./ # no tags: cgo_release.go links build/, as users get it
 
       # MSYS2 provides a known MinGW-w64 gcc (for cgo and as the linker for the Rust GNU
       # target) plus make, strip, cp, mkdir -p. path-type: inherit keeps the go and cargo
@@ -81,7 +82,7 @@ jobs:
           CARGO_BUILD_TARGET: x86_64-pc-windows-gnu
         run: |
           gcc --version
-          make strip
+          make build_release
 
       - name: Test (Windows)
         if: runner.os == 'Windows'
@@ -89,7 +90,7 @@ jobs:
         env:
           CGO_ENABLED: "1"
           CC: gcc
-        run: go test -v ./
+        run: go test -v ./ # no tags: cgo_release.go links build/, as users get it
 
       # both paths are under build/, so the artifact holds lib/<plat>/... and include/...
       - name: Upload build outputs

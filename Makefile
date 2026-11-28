@@ -23,26 +23,61 @@ else
 	endif
 endif
 
-.PHONY: test_stripped
-test_stripped: build_rust strip
-	go test -v ./
+# where build_rust and strip put the header and library. Defaults to the dev folder, so only
+# the *_release targets below ever write to the committed build/
+OUT ?= build-dev
+
+# ---- dev: build-dev/ (git-ignored), linked with -tags dev (cgo_dev.go) ----
+
+.PHONY: build_dev
+build_dev:
+	$(MAKE) build_rust OUT=build-dev
+
+.PHONY: test_dev
+test_dev: build_dev
+	go test -tags dev ./
+
+.PHONY: test_dev_stripped
+test_dev_stripped:
+	$(MAKE) strip OUT=build-dev
+	go test -tags dev -v ./
 
 .PHONY: test
-test: build_rust
-	go test ./
+test: test_dev
+
+# ---- release: build/, committed by CI to the release PR and linked by default
+# (cgo_release.go), so it is what users of the module get ----
+
+# stripped, as it gets committed. CI runs this; locally it changes tracked files
+.PHONY: build_release
+build_release:
+	@echo "" >&2
+	@echo "WARNING: building into build/, which is committed and is what users of the module get." >&2
+	@echo "         CI updates it on the release PR. Don't commit a local build." >&2
+	@echo "" >&2
+	$(MAKE) strip OUT=build
+
+# the committed build/ libraries as they are, without building anything
+.PHONY: test_release
+test_release:
+	@echo "" >&2
+	@echo "WARNING: testing the committed build/ libraries, not your local changes. They come" >&2
+	@echo "         from the last release PR and may not match the current Rust code." >&2
+	@echo "" >&2
+	go test -v ./
 
 .PHONY: strip
 strip: build_rust
 ifeq ($(shell uname -s),Darwin)
-	strip -S build/lib/$(DEST_DIR)/*.a
-	ranlib build/lib/$(DEST_DIR)/*.a
+	strip -S $(OUT)/lib/$(DEST_DIR)/*.a
+	ranlib $(OUT)/lib/$(DEST_DIR)/*.a
 else
-	strip -g build/lib/$(DEST_DIR)/*.a
+	strip -g $(OUT)/lib/$(DEST_DIR)/*.a
 endif
 
 .PHONY: build_rust
 build_rust:
 	$(MAKE) -C rust_ffi
-	mkdir -p build/lib/$(DEST_DIR) build/include
-	cp rust_ffi/include/* build/include/
-	cp $(LIB_FILES) build/lib/$(DEST_DIR)/
+	mkdir -p $(OUT)/lib/$(DEST_DIR) $(OUT)/include
+	cp rust_ffi/include/* $(OUT)/include/
+	cp $(LIB_FILES) $(OUT)/lib/$(DEST_DIR)/
