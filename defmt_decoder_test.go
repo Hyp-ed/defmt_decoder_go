@@ -2,6 +2,7 @@ package defmt_decoder
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -25,20 +26,29 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestSanityCheck(t *testing.T) {
+func TestIncompleteStreamInput(t *testing.T) {
 	file, err := os.Open("./testdata/defmt_stream.bin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	dec := decoders[0]
 
 	go func() {
-		if _, err := io.Copy(dec, file); err != nil {
-			t.Error(err)
+		buffer := make([]byte, 4)
+
+		for {
+			num_read, err := file.Read(buffer)
+
+			if errors.Is(err, io.EOF) {
+				break
+			}
+
+			_, _ = dec.Write(buffer[0:num_read])
 		}
-		dec.Close()
+
+		_ = dec.Close()
 	}()
 
 	expected, err := os.ReadFile("./testdata/expected.txt")
@@ -69,4 +79,5 @@ func TestSanityCheck(t *testing.T) {
 			t.Errorf("frame %d: got %q, expected %q", i, got[i], expectedLines[i])
 		}
 	}
+
 }
