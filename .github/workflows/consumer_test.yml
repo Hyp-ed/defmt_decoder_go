@@ -1,0 +1,85 @@
+name: Consumer test
+
+# Fetches github.com/Hyp-ed/defmt_decoder_go at a given version into a separate module
+# (.github/consumer) and decodes the test stream with it, on every platform that ships a
+# prebuilt library. Only Go and a C compiler are installed, no Rust, like a user's machine.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Anything `go get` accepts after @: a tag, branch or commit"
+        type: string
+        required: true
+      direct:
+        description: "Fetch from GitHub instead of the module proxy (for unreleased commits)"
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Anything `go get` accepts after @: a tag, branch or commit"
+        type: string
+        required: true
+      direct:
+        description: "Fetch from GitHub instead of the module proxy (for unreleased commits)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  consumer:
+    name: consumer (${{ matrix.plat }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # MSYS2 on Windows for the MinGW gcc cgo needs, bash everywhere else
+          - { plat: linux_amd64, os: ubuntu-latest, shell: bash }
+          - { plat: linux_arm64, os: ubuntu-26.04-arm, shell: bash }
+          - { plat: macos_arm64, os: macos-latest, shell: bash }
+          - { plat: windows_amd64, os: windows-latest, shell: "msys2 {0}" }
+
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+
+    env:
+      MODULE: github.com/Hyp-ed/defmt_decoder_go
+      VERSION: ${{ inputs.version }}
+      # skips the proxy and the checksum database, which would otherwise record every
+      # unreleased commit tested here
+      GOPRIVATE: ${{ inputs.direct && 'github.com/Hyp-ed/defmt_decoder_go' || '' }}
+      CGO_ENABLED: "1"
+
+    steps:
+      # only the consumer program, the module itself comes from `go get`
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/consumer
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: .github/consumer/go.mod
+          cache: false
+
+      # path-type: inherit keeps the go installed above (and git, for direct fetches) on PATH
+      - uses: msys2/setup-msys2@v2
+        if: runner.os == 'Windows'
+        with:
+          msystem: MINGW64
+          path-type: inherit
+          update: false
+          install: mingw-w64-x86_64-gcc
+
+      - name: Fetch the module
+        working-directory: .github/consumer
+        run: |
+          go get "$MODULE@$VERSION"
+          go list -m "$MODULE"
+
+      - name: Decode the test stream
+        working-directory: .github/consumer
+        run: go run . "$(go list -m -f '{{.Dir}}' "$MODULE")"
