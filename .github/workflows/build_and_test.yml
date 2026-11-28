@@ -1,0 +1,103 @@
+name: Build and test
+
+# Runs on its own for PRs, and as a job of publish.yml for pushes to main (the libraries it
+# uploads are the ones publish.yml commits to the release PR).
+on:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+# a new push to a PR cancels that PR's previous run. When called from publish.yml,
+# github.workflow is "Publish" and runs there must not be cancelled, so this only applies to PRs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-build
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build_and_test:
+    name: build and test (${{ matrix.plat }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false # see every platform's result, publish.yml still requires all of them
+      matrix:
+        include:
+          - { plat: linux_amd64, os: ubuntu-latest }
+          - { plat: linux_arm64, os: ubuntu-26.04-arm }
+          - { plat: macos_arm64, os: macos-latest }
+          - { plat: windows_amd64, os: windows-latest }
+
+    steps:
+      - uses: actions/checkout@v7 # the commit that triggered the run (the caller's, when called)
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          # the module has no external dependencies, so there is no go.sum
+          cache-dependency-path: go.mod
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: runner.os != 'Windows'
+
+      # cgo links with MinGW, so the library must be built for the GNU target
+      - uses: dtolnay/rust-toolchain@stable
+        if: runner.os == 'Windows'
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust_ffi
+
+      # `make strip` builds first, so the tests run against the exact files that get committed
+      - name: Build and strip (Linux, macOS)
+        if: runner.os != 'Windows'
+        run: make strip
+
+      - name: Test (Linux, macOS)
+        if: runner.os != 'Windows'
+        run: go test -v ./
+
+      # MSYS2 provides a known MinGW-w64 gcc (for cgo and as the linker for the Rust GNU
+      # target) plus make, strip, cp, mkdir -p. path-type: inherit keeps the go and cargo
+      # installed by the steps above on PATH.
+      - uses: msys2/setup-msys2@v2
+        if: runner.os == 'Windows'
+        with:
+          msystem: MINGW64
+          path-type: inherit
+          update: false
+          install: >-
+            make
+            mingw-w64-x86_64-gcc
+
+      - name: Build and strip (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        env:
+          # makes cargo output go to rust_ffi/target/x86_64-pc-windows-gnu/release (see Makefile)
+          CARGO_BUILD_TARGET: x86_64-pc-windows-gnu
+        run: |
+          gcc --version
+          make strip
+
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        env:
+          CGO_ENABLED: "1"
+          CC: gcc
+        run: go test -v ./
+
+      # both paths are under build/, so the artifact holds lib/<plat>/... and include/...
+      - name: Upload build outputs
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-${{ matrix.plat }}
+          path: |
+            build/lib/${{ matrix.plat }}/libdefmt_decoder_wrapper.a
+            build/include/defmt_decoder_wrapper.h
+          if-no-files-found: error
+          retention-days: 7

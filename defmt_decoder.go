@@ -10,7 +10,6 @@ package defmt_decoder
 #cgo linux,arm64 LDFLAGS: ${SRCDIR}/build/lib/linux_arm64/libdefmt_decoder_wrapper.a -lgcc_s -lutil -lrt -lpthread -lm -ldl -lc
 #cgo darwin,amd64 LDFLAGS: ${SRCDIR}/build/lib/macos_amd64/libdefmt_decoder_wrapper.a -framework CoreFoundation -lc -lm
 #cgo darwin,arm64 LDFLAGS: ${SRCDIR}/build/lib/macos_arm64/libdefmt_decoder_wrapper.a -framework CoreFoundation -lc -lm
-// not yet confirmed with --print native-static-libs, the Windows CI test is what checks it
 #cgo windows,amd64 LDFLAGS: ${SRCDIR}/build/lib/windows_amd64/libdefmt_decoder_wrapper.a -lkernel32 -ladvapi32 -lntdll -luserenv -lws2_32 -ldbghelp -lsynchronization -lole32 -loleaut32
 #include "defmt_decoder_wrapper.h"
 */

@@ -15,7 +15,8 @@ ifeq ($(OS),Windows_NT)
 else ifeq ($(shell uname -s),Darwin)
 	DEST_DIR := macos_arm64
 else
-	ifeq ($(shell uname -m),arm64)
+	# Linux reports aarch64, not arm64
+	ifneq ($(filter arm64 aarch64,$(shell uname -m)),)
 		DEST_DIR := linux_arm64
 	else
 		DEST_DIR := linux_amd64

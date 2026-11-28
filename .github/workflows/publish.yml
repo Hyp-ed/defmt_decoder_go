@@ -1,83 +1,114 @@
 name: Publish
 
+# Every push to main is built and tested by build_and_test.yml. While release-please has a
+# release PR open on the release-please--branches--main branch, the libraries and header from
+# that build are committed onto the PR branch, so when the PR is merged, the commit
+# release-please tags already contains build/, which is what `go get` downloads.
 on:
   push:
-    branches: 
-      - release/v*
+    branches: [main]
+  workflow_dispatch:
+
+# two runs pushing to the release PR branch at once would race, so they queue instead
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_BRANCH: release-please--branches--main
 
 jobs:
-  build_and_test:
-    name: Build with all the static libs and test
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ["ubuntu-latest", "macos-latest", "ubuntu-26.04-arm", "windows-latest"]
+  release-please:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write # labels on the release PR
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+      pr_open: ${{ steps.pr.outputs.open }}
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: rp
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
 
+      # release-please only reports a PR when it creates or changes one, but the libraries
+      # are recommitted after every push to main while the PR is open
+      - name: Check for an open release PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n=$(gh pr list -R "$GITHUB_REPOSITORY" --head "$RELEASE_BRANCH" --state open --json number --jq length)
+          echo "open=$([ "$n" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  # builds the commit that was pushed to main, the same source the release branch has once
+  # commit_libs merges that commit in
+  build_and_test:
+    uses: ./.github/workflows/build_and_test.yml
+
+  commit_libs:
+    name: Commit libraries and header to the release PR
+    needs: [release-please, build_and_test]
+    if: needs.release-please.outputs.pr_open == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
-
-      - uses: "actions/setup-go@v5"
-        with: 
-          go-version-file: "go.mod"
-          cache-dependency-path: go.mod
-
-      - uses: dtolnay/rust-toolchain@stable
-        if: runner.os != 'Windows'
-
-      # cgo links with MinGW, so the cdylib must be built for the GNU target
-      - uses: dtolnay/rust-toolchain@stable
-        if: runner.os == 'Windows'
         with:
-          targets: x86_64-pc-windows-gnu
+          ref: ${{ env.RELEASE_BRANCH }}
+          fetch-depth: 0
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: rust_ffi
-
-      - name: Build (Linux, macOS)
-        if: runner.os != 'Windows'
-        run: make build_rust
-
-      - name: Test (Linux, macOS)
-        if: runner.os != 'Windows'
-        run: go test -v ./
-          
-      # MSYS2 provides a known MinGW-w64 gcc (for cgo and as the linker for the Rust GNU
-      # target) plus make, cp, mkdir -p. path-type: inherit keeps the go and cargo installed
-      # by the steps above on PATH.
-      - uses: msys2/setup-msys2@v2
-        if: runner.os == 'Windows'
-        with:
-          msystem: MINGW64
-          path-type: inherit
-          update: false
-          install: >-
-            make
-            mingw-w64-x86_64-gcc
-
-      - name: Build (Windows)
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        env:
-          # makes cargo output go to rust_ffi/target/x86_64-pc-windows-gnu/release (see Makefile)
-          CARGO_BUILD_TARGET: x86_64-pc-windows-gnu
+      # the PR branch can lag behind main when a push didn't change the changelog
+      - name: Bring the release branch up to date with main
         run: |
-          gcc --version
-          make build_rust
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --no-edit "$GITHUB_SHA"
 
-      - name: Test (Windows)
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        env:
-          CGO_ENABLED: "1"
-          CC: gcc
+      - name: Download build outputs
+        uses: actions/download-artifact@v8
+        with:
+          pattern: build-*
+          merge-multiple: true
+          path: build
+
+      - name: Commit and push
         run: |
-          go test -v ./
-    
-  publish:
-    name: "Publish to GO"
-    runs-on: "ubuntu-latest"
-    needs: ["build"]
+          ls -lR build
+          git add -f build/lib build/include
+          # git can't commit files that are byte-identical to the ones already there
+          if git diff --cached --quiet; then
+            echo "Rebuilt libraries and header are identical to the committed ones"
+          else
+            git commit -m "chore: update prebuilt libraries and header"
+          fi
+          # no force: if the branch moved since checkout, fail instead of overwriting it
+          git push origin "HEAD:refs/heads/$RELEASE_BRANCH"
 
-    
+  # the release PR was merged and tagged: check that Go can fetch the new version
+  verify:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Fetch the tag through the Go module proxy
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          cd "$(mktemp -d)"
+          go mod init verify
+          go list -m "github.com/${GITHUB_REPOSITORY}@${TAG}"
