@@ -61,6 +61,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      sha: ${{ steps.push.outputs.sha }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -82,6 +84,7 @@ jobs:
           path: build
 
       - name: Commit and push
+        id: push
         run: |
           ls -lR build
           git add -f build/lib build/include
@@ -93,22 +96,22 @@ jobs:
           fi
           # no force: if the branch moved since checkout, fail instead of overwriting it
           git push origin "HEAD:refs/heads/$RELEASE_BRANCH"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-  # the release PR was merged and tagged: check that Go can fetch the new version
+  # use the release PR's exact commit as a dependency, the way it will be once tagged. If this
+  # fails, don't merge the release PR
+  consumer_test:
+    needs: commit_libs
+    uses: ./.github/workflows/consumer_test.yml
+    with:
+      version: ${{ needs.commit_libs.outputs.sha }}
+      direct: true
+
+  # the release PR was merged and tagged: the same test on what users now download, through
+  # the module proxy (this also caches the version there)
   verify:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/setup-go@v7
-        with:
-          go-version: stable
-          cache: false
-
-      - name: Fetch the tag through the Go module proxy
-        env:
-          TAG: ${{ needs.release-please.outputs.tag_name }}
-        run: |
-          cd "$(mktemp -d)"
-          go mod init verify
-          go list -m "github.com/${GITHUB_REPOSITORY}@${TAG}"
+    uses: ./.github/workflows/consumer_test.yml
+    with:
+      version: ${{ needs.release-please.outputs.tag_name }}
