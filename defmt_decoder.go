@@ -20,8 +20,11 @@ import (
 // "\n". Wrap it in a bufio.Scanner to get one line at a time.
 //
 // Read blocks until a frame is available or Close is called. A Decoder is safe for concurrent
-// use, typically one goroutine writing and one reading.
+// use, typically one goroutine writing and one reading. Once you close the stream, it cannot
+// be openned nor initialized again.
 type Decoder struct {
+	// this field is never going to be changed, and the underlying rust implementation has a mutex to
+	// guard the array element this index is referring to.
 	idx    int
 	mu     sync.Mutex
 	cond   *sync.Cond // signalled by Write and Close, waited on by Read
@@ -57,6 +60,7 @@ func (d *Decoder) Write(p []byte) (int, error) {
 	}
 
 	d.cond.Broadcast()
+
 	return len(p), nil
 }
 
@@ -65,12 +69,12 @@ func (d *Decoder) Write(p []byte) (int, error) {
 // last frame are dropped. Corrupt frames are logged and skipped. A frame longer than p is
 // split across Reads. Any other error is a *DecodeError.
 func (d *Decoder) Read(p []byte) (int, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	if len(p) == 0 {
 		return 0, nil
 	}
-
-	d.mu.Lock()
-	defer d.mu.Unlock()
 
 	for {
 		result := C.defmt_decoder_decode(C.size_t(d.idx), (*C.uint8_t)(unsafe.Pointer(&p[0])), C.size_t(len(p)))
@@ -82,6 +86,7 @@ func (d *Decoder) Read(p []byte) (int, error) {
 			if d.closed {
 				return 0, io.EOF
 			}
+
 			d.cond.Wait() // releases mu until Write or Close
 		case DecodeErrorCode(result) == malformedFrame:
 			log.Printf("defmt_decoder: skipped a malformed frame on decoder %d", d.idx)
@@ -98,6 +103,7 @@ func (d *Decoder) Close() error {
 	defer d.mu.Unlock()
 
 	d.closed = true
+
 	d.cond.Broadcast()
 	return nil
 }
