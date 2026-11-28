@@ -27,7 +27,7 @@ endif
 # the *_release targets below ever write to the committed build/
 OUT ?= build-dev
 
-# ---- dev: build-dev/ (git-ignored), linked with -tags dev (cgo_dev.go) ----
+# ---- dev: build-dev/ (git-ignored), linked with -tags defmt_decoder_dev (cgo_dev.go) ----
 
 .PHONY: build_dev
 build_dev:
@@ -35,12 +35,12 @@ build_dev:
 
 .PHONY: test_dev
 test_dev: build_dev
-	go test -tags dev ./
+	go test -tags defmt_decoder_dev ./
 
 .PHONY: test_dev_stripped
 test_dev_stripped:
 	$(MAKE) strip OUT=build-dev
-	go test -tags dev -v ./
+	go test -tags defmt_decoder_dev -v ./
 
 .PHONY: test
 test: test_dev

@@ -1,4 +1,4 @@
-//go:build !dev
+//go:build !defmt_decoder_dev
 
 // The default, and what users of the module get: links the libraries CI built and committed
 // to build/ on the release PR. Local dev builds go to build-dev/ instead, see cgo_dev.go.

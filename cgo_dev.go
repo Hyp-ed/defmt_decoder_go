@@ -1,8 +1,9 @@
-//go:build dev
+//go:build defmt_decoder_dev
 
-// With -tags dev (what the make *_dev targets pass), links the library from a local build in
-// build-dev/, which is git-ignored. Without the tag, cgo_release.go links the committed build/
-// instead, which is what users of the module get.
+// With -tags defmt_decoder_dev (what the make *_dev targets pass), links the library from a
+// local build in build-dev/, which is git-ignored. Without the tag, cgo_release.go links the
+// committed build/ instead, which is what users of the module get. The tag is named after the
+// package because tags apply to the whole build: a user's own "dev" tag must not switch this.
 
 package defmt_decoder
 
